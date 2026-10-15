@@ -6,10 +6,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>家教學習中心</title>
 <style>
-:root {
-  font-family: system-ui,-apple-system,"Noto Sans TC",sans-serif;
-  background:#f4f7fb;
-  color:#263449;
+:root{
+  font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;
+  background:#f4f7fb;color:#263449
 }
 *{box-sizing:border-box}
 body{margin:0}
@@ -21,17 +20,21 @@ button{
 button.secondary{background:#e8eef8;color:#30415d}
 button.danger{background:#c43d43}
 button:disabled{opacity:.6;cursor:not-allowed}
-input,select,textarea{
+input:not([type=checkbox]),select,textarea{
   width:100%;padding:10px;border:1px solid #cbd5e1;
   border-radius:8px;background:white
 }
+input[type=checkbox]{width:18px;height:18px;accent-color:#2563eb}
 textarea{min-height:80px}
 .shell{max-width:1100px;margin:auto;padding:20px}
 .panel{
   background:white;border-radius:16px;padding:20px;
   margin:15px 0;box-shadow:0 3px 16px #142a4910
 }
-.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.top{
+  display:flex;justify-content:space-between;
+  align-items:center;gap:12px;flex-wrap:wrap
+}
 .muted{color:#64748b}
 .hide{display:none!important}
 .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:15px 0}
@@ -48,7 +51,10 @@ textarea{min-height:80px}
   padding:16px;border:1px solid #e2e8f0;
   border-radius:12px;margin:12px 0;overflow-wrap:anywhere
 }
-.item-head{display:flex;justify-content:space-between;gap:12px;align-items:start}
+.item-head{
+  display:flex;justify-content:space-between;
+  gap:12px;align-items:start
+}
 .pill{
   display:inline-block;padding:4px 9px;border-radius:99px;
   background:#eaf1ff;color:#2457a6;font-size:12px
@@ -62,14 +68,14 @@ textarea{min-height:80px}
 }
 .day-heading{
   background:#edf4ff;padding:13px 16px;
-  display:flex;justify-content:space-between;gap:8px;
-  align-items:center;flex-wrap:wrap
+  display:flex;justify-content:space-between;
+  gap:8px;align-items:center;flex-wrap:wrap
 }
 .day-body{padding:4px 15px}
 .hw-row{
   padding:15px 0;border-bottom:1px solid #edf0f5;
-  display:flex;justify-content:space-between;gap:14px;
-  align-items:center;flex-wrap:wrap
+  display:flex;justify-content:space-between;
+  gap:14px;align-items:center;flex-wrap:wrap
 }
 .hw-row:last-child{border-bottom:0}
 .hw-info{flex:1;min-width:180px}
@@ -89,11 +95,28 @@ textarea{min-height:80px}
   padding:12px;background:#f8fafc;border-radius:12px
 }
 .filterbar label{display:grid;gap:5px;min-width:145px}
+.curriculum-box{
+  border:1px solid #cbdff9;background:#f8fbff;
+  border-radius:13px;padding:16px;margin:8px 0
+}
+.curriculum-box h3{margin:0 0 12px}
+.section-list{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px;margin-top:10px
+}
+.section-check{
+  display:flex!important;flex-direction:row!important;
+  align-items:center;gap:8px;padding:10px;
+  background:white;border:1px solid #e2e8f0;
+  border-radius:9px;cursor:pointer
+}
+.section-check input{flex-shrink:0}
+.chapter-info{margin:8px 0;color:#475569;font-size:14px}
 #message{white-space:pre-wrap}
 @media(max-width:650px){
   .shell{padding:12px}
   .panel{padding:15px}
-  .grid,.formgrid{grid-template-columns:1fr}
+  .grid,.formgrid,.section-list{grid-template-columns:1fr}
   .hw-controls{width:100%}
 }
 </style>
@@ -104,7 +127,7 @@ textarea{min-height:80px}
 <header class="top">
   <div>
     <h1>📚 家教學習中心</h1>
-    <div class="muted">國中理化・數學</div>
+    <div class="muted">國中數學・理化・生物</div>
   </div>
   <button id="logout" class="secondary hide">登出</button>
 </header>
@@ -153,6 +176,10 @@ textarea{min-height:80px}
 <script type="module">
 import {firebaseConfig} from "./firebase-config.js";
 
+import {
+  getSubjects,getSemesters,getChapters,getSections
+} from "./curriculum.js";
+
 import {initializeApp} from
 "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 
@@ -186,31 +213,23 @@ const names={
 const fields={
   progress:[
     ["date","日期","date"],
-    ["subject","科目","select"],
-    ["title","章節／主題"],
     ["detail","上課內容","textarea"],
     ["completion","完成進度（0～100）","number"],
     ["next","下次進度"]
   ],
   grades:[
     ["date","考試日期","date"],
-    ["subject","科目","select"],
-    ["title","考試名稱／範圍"],
     ["score","得分","number"],
     ["total","滿分","number"],
     ["detail","老師評語","textarea"]
   ],
   materials:[
     ["date","上架日期","date"],
-    ["subject","科目","select"],
-    ["title","教材名稱"],
     ["url","教材連結","url"],
     ["detail","說明","textarea"]
   ],
   mistakes:[
     ["date","紀錄日期","date"],
-    ["subject","科目","select"],
-    ["title","錯題觀念／題型"],
     ["detail","錯誤原因","textarea"],
     ["advice","訂正建議","textarea"]
   ]
@@ -261,6 +280,14 @@ function today(){
   ].join("-");
 }
 
+function getStatus(x){
+  if(["unchecked","done","correct","missing"].includes(x.status)){
+    return x.status;
+  }
+  if(x.done===true)return "done";
+  return "unchecked";
+}
+
 async function load(kind){
   const snap=await getDocs(query(
     collection(db,kind),
@@ -277,31 +304,242 @@ async function load(kind){
 async function reload(){
   try{
     cache={};
+
     if(!activeUid()){
       render();
       return;
     }
+
     for(const kind of Object.keys(names).filter(k=>k!=="charts")){
       cache[kind]=await load(kind);
     }
+
     render();
   }catch(e){
     msg("資料讀取失敗："+e.message,true);
   }
 }
 
-function getStatus(x){
-  if(["unchecked","done","correct","missing"].includes(x.status)){
-    return x.status;
-  }
-  if(x.done===true)return "done";
-  return "unchecked";
+/* ===========================
+   課程章節選擇器
+=========================== */
+
+function curriculumSelectorHTML(existing={}){
+  const subject=existing.subject||"數學";
+
+  return `
+    <div class="curriculum-box full" id="curriculumSelector">
+      <h3>📚 選擇科目與章節</h3>
+
+      <div class="formgrid">
+        <label>
+          科目
+          <select id="currSubject" name="subject">
+            ${getSubjects().map(s=>`
+              <option value="${esc(s)}"
+                ${s===subject?"selected":""}>
+                ${esc(s)}
+              </option>
+            `).join("")}
+          </select>
+        </label>
+
+        <label>
+          年級／學期
+          <select id="currSemester" name="semester"></select>
+        </label>
+
+        <label class="full">
+          章節
+          <select id="currChapter" name="chapter"></select>
+        </label>
+      </div>
+
+      <div style="margin-top:14px">
+        <div class="top">
+          <strong>小節（可複選）</strong>
+          <button type="button" class="secondary"
+            id="selectAllSections">
+            全選／取消全選
+          </button>
+        </div>
+
+        <div id="currSections" class="section-list"></div>
+      </div>
+
+      <p class="muted" style="font-size:13px">
+        選擇章節後，系統會自動產生名稱，
+        你仍然可以自行修改。
+      </p>
+    </div>
+  `;
 }
+
+function setupCurriculumSelector(existing={}){
+  const subjectEl=$("#currSubject");
+  const semesterEl=$("#currSemester");
+  const chapterEl=$("#currChapter");
+  const sectionsEl=$("#currSections");
+  const allBtn=$("#selectAllSections");
+
+  if(!subjectEl)return;
+
+  const initialSections=Array.isArray(existing.sections)
+    ?existing.sections:[];
+
+  function renderSections(selected=[]){
+    const sections=getSections(
+      subjectEl.value,
+      semesterEl.value,
+      chapterEl.value
+    );
+
+    if(!sections.length){
+      sectionsEl.innerHTML=`
+        <p class="muted">
+          這個科目尚未建立小節，可直接輸入名稱。
+        </p>
+      `;
+      return;
+    }
+
+    sectionsEl.innerHTML=sections.map(s=>`
+      <label class="section-check">
+        <input type="checkbox" name="sections"
+          value="${esc(s)}"
+          ${selected.includes(s)?"checked":""}>
+        <span>${esc(s)}</span>
+      </label>
+    `).join("");
+  }
+
+  function fillChapters(preferred="",selected=[]){
+    const chapters=getChapters(
+      subjectEl.value,semesterEl.value
+    );
+
+    chapterEl.innerHTML=chapters.map(c=>`
+      <option value="${esc(c)}">${esc(c)}</option>
+    `).join("");
+
+    if(chapters.includes(preferred)){
+      chapterEl.value=preferred;
+    }
+
+    renderSections(selected);
+  }
+
+  function fillSemesters(preferred="",chapter="",selected=[]){
+    const semesters=getSemesters(subjectEl.value);
+
+    semesterEl.innerHTML=semesters.map(s=>`
+      <option value="${esc(s)}">${esc(s)}</option>
+    `).join("");
+
+    if(semesters.includes(preferred)){
+      semesterEl.value=preferred;
+    }
+
+    fillChapters(chapter,selected);
+  }
+
+  subjectEl.onchange=()=>{
+    fillSemesters();
+    autoFillTitle();
+  };
+
+  semesterEl.onchange=()=>{
+    fillChapters();
+    autoFillTitle();
+  };
+
+  chapterEl.onchange=()=>{
+    renderSections();
+    autoFillTitle();
+  };
+
+  sectionsEl.onchange=autoFillTitle;
+
+  allBtn.onclick=()=>{
+    const boxes=[...sectionsEl.querySelectorAll(
+      'input[type="checkbox"]'
+    )];
+
+    const shouldCheck=boxes.some(b=>!b.checked);
+    boxes.forEach(b=>b.checked=shouldCheck);
+
+    autoFillTitle();
+  };
+
+  fillSemesters(
+    existing.semester||"",
+    existing.chapter||"",
+    initialSections
+  );
+}
+
+function selectedCurriculum(){
+  const subject=$("#currSubject")?.value||"其他";
+  const semester=$("#currSemester")?.value||"";
+  const chapter=$("#currChapter")?.value||"";
+
+  const sections=[...document.querySelectorAll(
+    '#currSections input[name="sections"]:checked'
+  )].map(x=>x.value);
+
+  return {subject,semester,chapter,sections};
+}
+
+function curriculumTitle(data){
+  if(data.sections.length){
+    return data.sections.join("、");
+  }
+  return data.chapter||"";
+}
+
+function autoFillTitle(){
+  const titleEl=$("#recordTitle");
+  if(!titleEl)return;
+
+  const next=curriculumTitle(selectedCurriculum());
+
+  if(titleEl.dataset.manual==="true")return;
+
+  titleEl.value=next;
+}
+
+function bindTitleTracking(){
+  const titleEl=$("#recordTitle");
+  if(!titleEl)return;
+
+  titleEl.oninput=()=>{
+    titleEl.dataset.manual="true";
+  };
+}
+
+function curriculumDisplay(x){
+  const pieces=[
+    x.semester,
+    x.chapter,
+    ...(Array.isArray(x.sections)?x.sections:[])
+  ].filter(Boolean);
+
+  if(!pieces.length)return "";
+
+  return `
+    <p class="chapter-info">
+      📖 ${pieces.map(esc).join("／")}
+    </p>
+  `;
+}
+
+/* ===========================
+   網站主畫面
+=========================== */
 
 function render(){
   const works=cache.homework||[];
   const progress=cache.progress||[];
-  const grades=cache.grades||[];
 
   const stats=[
     ["課程紀錄",progress.length],
@@ -337,30 +575,27 @@ function render(){
 
   if(tab==="homework"){
     renderHomework();
-    return;
-  }
-
-  if(tab==="charts"){
+  }else if(tab==="charts"){
     drawChart();
-    return;
+  }else{
+    renderStandard();
   }
-
-  renderStandard();
 }
 
 /* ===========================
-   作業管理：每日作業表
+   每日作業管理
 =========================== */
 
 function renderHomework(){
   const works=cache.homework||[];
 
-  const dates=[...new Set(works.map(x=>x.date).filter(Boolean))]
-    .sort((a,b)=>b.localeCompare(a));
+  const dates=[...new Set(
+    works.map(x=>x.date).filter(Boolean)
+  )].sort((a,b)=>b.localeCompare(a));
 
   const shown=homeworkFilter==="all"
-    ? works
-    : works.filter(x=>x.date===homeworkFilter);
+    ?works
+    :works.filter(x=>x.date===homeworkFilter);
 
   const groups={};
 
@@ -375,10 +610,11 @@ function renderHomework(){
         <h2>作業管理</h2>
         <p class="muted">
           ${isAdmin()
-            ?"設定每日作業，上課批改後記錄學生完成情況。"
-            :"查看老師安排的每日作業與批改結果。"}
+            ?"設定每日作業，上課批改後記錄完成情況。"
+            :"查看每日作業與老師的批改結果。"}
         </p>
       </div>
+
       ${isAdmin()
         ?'<button id="addHomework">＋新增作業</button>'
         :""}
@@ -401,7 +637,8 @@ function renderHomework(){
 
     <div id="homeworkList">
       ${Object.keys(groups).length
-        ?Object.keys(groups).sort((a,b)=>b.localeCompare(a))
+        ?Object.keys(groups)
+          .sort((a,b)=>b.localeCompare(a))
           .map(date=>`
             <section class="homework-day">
               <div class="day-heading">
@@ -409,7 +646,9 @@ function renderHomework(){
                 <span>${groups[date].length} 項作業</span>
               </div>
               <div class="day-body">
-                ${groups[date].map((x,i)=>homeworkRow(x,i)).join("")}
+                ${groups[date].map((x,i)=>
+                  homeworkRow(x,i)
+                ).join("")}
               </div>
             </section>
           `).join("")
@@ -420,38 +659,47 @@ function renderHomework(){
   if(isAdmin()){
     $("#addHomework").onclick=()=>editHomework();
 
-    $("#homeworkList").querySelectorAll("[data-edit-hw]").forEach(b=>{
-      b.onclick=()=>editHomework(
-        works.find(x=>x.id===b.dataset.editHw)
-      );
-    });
+    $("#homeworkList")
+      .querySelectorAll("[data-edit-hw]")
+      .forEach(b=>{
+        b.onclick=()=>editHomework(
+          works.find(x=>x.id===b.dataset.editHw)
+        );
+      });
 
-    $("#homeworkList").querySelectorAll("[data-delete-hw]").forEach(b=>{
-      b.onclick=()=>remove("homework",b.dataset.deleteHw);
-    });
+    $("#homeworkList")
+      .querySelectorAll("[data-delete-hw]")
+      .forEach(b=>{
+        b.onclick=()=>remove(
+          "homework",b.dataset.deleteHw
+        );
+      });
 
-    $("#homeworkList").querySelectorAll("[data-status]").forEach(s=>{
-      s.onchange=async()=>{
-        const x=works.find(r=>r.id===s.dataset.status);
-        if(!x)return;
+    $("#homeworkList")
+      .querySelectorAll("[data-status]")
+      .forEach(s=>{
+        s.onchange=async()=>{
+          const x=works.find(r=>r.id===s.dataset.status);
+          if(!x)return;
 
-        const old=getStatus(x);
-        s.disabled=true;
+          const old=getStatus(x);
+          s.disabled=true;
 
-        try{
-          await updateDoc(doc(db,"homework",x.id),{
-            status:s.value,
-            done:s.value==="done"
-          });
-          msg("已更新作業狀態");
-          await reload();
-        }catch(e){
-          s.value=old;
-          s.disabled=false;
-          msg("更新失敗："+e.message,true);
-        }
-      };
-    });
+          try{
+            await updateDoc(doc(db,"homework",x.id),{
+              status:s.value,
+              done:s.value==="done"
+            });
+
+            msg("已更新作業狀態");
+            await reload();
+          }catch(e){
+            s.value=old;
+            s.disabled=false;
+            msg("更新失敗："+e.message,true);
+          }
+        };
+      });
   }
 
   $("#homeworkDateFilter").onchange=e=>{
@@ -469,39 +717,46 @@ function homeworkRow(x,index){
         批改結果
         <select data-status="${esc(x.id)}">
           ${Object.entries(statusNames).map(([key,name])=>`
-            <option value="${key}" ${status===key?"selected":""}>
+            <option value="${key}"
+              ${status===key?"selected":""}>
               ${name}
             </option>
           `).join("")}
         </select>
       </label>
+
       <div class="actions">
-        <button class="secondary" data-edit-hw="${esc(x.id)}">
-          編輯
-        </button>
-        <button class="danger" data-delete-hw="${esc(x.id)}">
-          刪除
-        </button>
+        <button class="secondary"
+          data-edit-hw="${esc(x.id)}">編輯</button>
+        <button class="danger"
+          data-delete-hw="${esc(x.id)}">刪除</button>
       </div>
     </div>
   `:`
-    <div>
-      <span class="status ${status}">
-        ${statusNames[status]}
-      </span>
-    </div>
+    <span class="status ${status}">
+      ${statusNames[status]}
+    </span>
   `;
 
   return `
     <div class="hw-row">
       <div class="hw-info">
-        <span class="pill">${esc(x.subject||"未分類")}</span>
+        <span class="pill">
+          ${esc(x.subject||"未分類")}
+        </span>
+
         <h3>${index+1}. ${esc(x.title)}</h3>
+
+        ${curriculumDisplay(x)}
+
         ${x.detail?`<p>${esc(x.detail)}</p>`:""}
+
         ${x.advice?`
-          <p><strong>老師提醒：</strong>${esc(x.advice)}</p>
+          <p><strong>老師提醒：</strong>
+          ${esc(x.advice)}</p>
         `:""}
       </div>
+
       ${controls}
     </div>
   `;
@@ -510,8 +765,10 @@ function homeworkRow(x,index){
 function editHomework(existing=null){
   $("#content").innerHTML=`
     <h2>${existing?"編輯":"新增"}每日作業</h2>
+
     <p class="muted">
-      一項作業建立一筆紀錄，同一天可以新增多項作業。
+      同一天可以新增多項作業。
+      選擇章節後，也可以自行修改作業名稱。
     </p>
 
     <form id="homeworkForm" class="formgrid">
@@ -521,21 +778,14 @@ function editHomework(existing=null){
           value="${esc(existing?.date||today())}">
       </label>
 
-      <label>
-        科目
-        <select name="subject">
-          ${["數學","理化","生物","其他"].map(s=>`
-            <option ${existing?.subject===s?"selected":""}>
-              ${s}
-            </option>
-          `).join("")}
-        </select>
-      </label>
+      <div class="full"></div>
+
+      ${curriculumSelectorHTML(existing||{})}
 
       <label class="full">
         作業名稱／範圍
-        <input name="title" required
-          placeholder="例如：數學講義 P.90～96"
+        <input id="recordTitle" name="title" required
+          placeholder="例如：講義 P.90～96"
           value="${esc(existing?.title||"")}">
       </label>
 
@@ -548,7 +798,7 @@ function editHomework(existing=null){
       <label class="full">
         老師提醒／訂正內容
         <textarea name="advice"
-          placeholder="例如：第 5、8 題需要重新訂正">${esc(existing?.advice||"")}</textarea>
+          placeholder="例如：第 5、8 題需要訂正">${esc(existing?.advice||"")}</textarea>
       </label>
 
       <label>
@@ -565,12 +815,20 @@ function editHomework(existing=null){
 
       <div class="actions full">
         <button type="submit">儲存作業</button>
-        <button type="button" id="cancelHomework" class="secondary">
-          取消
-        </button>
+        <button type="button" id="cancelHomework"
+          class="secondary">取消</button>
       </div>
     </form>
   `;
+
+  setupCurriculumSelector(existing||{});
+  bindTitleTracking();
+
+  if(existing){
+    $("#recordTitle").dataset.manual="true";
+  }else{
+    autoFillTitle();
+  }
 
   $("#cancelHomework").onclick=render;
 
@@ -578,9 +836,11 @@ function editHomework(existing=null){
     e.preventDefault();
 
     const f=new FormData(e.target);
+    const curr=selectedCurriculum();
+
     const data={
       date:String(f.get("date")),
-      subject:String(f.get("subject")),
+      ...curr,
       title:String(f.get("title")).trim(),
       detail:String(f.get("detail")).trim(),
       advice:String(f.get("advice")).trim(),
@@ -594,12 +854,16 @@ function editHomework(existing=null){
 
     data.done=data.status==="done";
 
-    const submit=e.target.querySelector('[type="submit"]');
+    const submit=e.target.querySelector(
+      '[type="submit"]'
+    );
     submit.disabled=true;
 
     try{
       if(existing){
-        await updateDoc(doc(db,"homework",existing.id),data);
+        await updateDoc(
+          doc(db,"homework",existing.id),data
+        );
       }else{
         await addDoc(collection(db,"homework"),{
           ...data,
@@ -619,7 +883,7 @@ function editHomework(existing=null){
 }
 
 /* ===========================
-   其他學習紀錄
+   課程進度、成績、教材、錯題
 =========================== */
 
 function renderStandard(){
@@ -627,9 +891,13 @@ function renderStandard(){
 
   $("#content").innerHTML=`
     <h2>${names[tab]}</h2>
+
     ${isAdmin()?`
-      <button id="addBtn">＋新增${names[tab]}</button>
+      <button id="addBtn">
+        ＋新增${names[tab]}
+      </button>
     `:""}
+
     <div id="records">
       ${arr.length
         ?arr.map(record).join("")
@@ -640,15 +908,21 @@ function renderStandard(){
   if(isAdmin()){
     $("#addBtn").onclick=()=>editStandard(tab);
 
-    $("#records").querySelectorAll("[data-edit]").forEach(b=>{
-      b.onclick=()=>editStandard(
-        tab,arr.find(x=>x.id===b.dataset.edit)
-      );
-    });
+    $("#records")
+      .querySelectorAll("[data-edit]")
+      .forEach(b=>{
+        b.onclick=()=>editStandard(
+          tab,arr.find(x=>x.id===b.dataset.edit)
+        );
+      });
 
-    $("#records").querySelectorAll("[data-delete]").forEach(b=>{
-      b.onclick=()=>remove(tab,b.dataset.delete);
-    });
+    $("#records")
+      .querySelectorAll("[data-delete]")
+      .forEach(b=>{
+        b.onclick=()=>remove(
+          tab,b.dataset.delete
+        );
+      });
   }
 }
 
@@ -656,42 +930,56 @@ function record(x){
   const score=x.score!==undefined
     ?`<b>${esc(x.score)} / ${esc(x.total)}
        (${Number(x.total)>0
-         ?Math.round(Number(x.score)/Number(x.total)*100)
-         :0}%)</b>`
+         ?Math.round(
+           Number(x.score)/Number(x.total)*100
+         ):0}%)</b>`
     :"";
 
   const link=tab==="materials"&&
     /^https:\/\//i.test(x.url||"")
-    ?`<a href="${esc(x.url)}" target="_blank"
-        rel="noopener noreferrer">開啟教材 ↗</a>`
+    ?`<a href="${esc(x.url)}"
+        target="_blank" rel="noopener noreferrer">
+        開啟教材 ↗
+      </a>`
     :"";
 
   return `
     <article class="item">
       <div class="item-head">
         <div>
-          <span class="pill">${esc(x.subject||"未分類")}</span>
+          <span class="pill">
+            ${esc(x.subject||"未分類")}
+          </span>
           <small class="muted">${esc(x.date)}</small>
           <h3>${esc(x.title)}</h3>
         </div>
         ${score}
       </div>
 
+      ${curriculumDisplay(x)}
+
       ${x.detail?`<p>${esc(x.detail)}</p>`:""}
+
       ${x.completion!==undefined
-        ?`<p>完成進度：${esc(x.completion)}%</p>`:""}
-      ${x.next?`<p>下次：${esc(x.next)}</p>`:""}
-      ${x.advice?`<p>訂正建議：${esc(x.advice)}</p>`:""}
+        ?`<p>完成進度：
+          ${esc(x.completion)}%</p>`:""}
+
+      ${x.next?`
+        <p>下次：${esc(x.next)}</p>
+      `:""}
+
+      ${x.advice?`
+        <p>訂正建議：${esc(x.advice)}</p>
+      `:""}
+
       ${link}
 
       ${isAdmin()?`
         <div class="actions">
-          <button class="secondary" data-edit="${esc(x.id)}">
-            編輯
-          </button>
-          <button class="danger" data-delete="${esc(x.id)}">
-            刪除
-          </button>
+          <button class="secondary"
+            data-edit="${esc(x.id)}">編輯</button>
+          <button class="danger"
+            data-delete="${esc(x.id)}">刪除</button>
         </div>
       `:""}
     </article>
@@ -701,65 +989,102 @@ function record(x){
 function editStandard(kind,existing=null){
   const formFields=fields[kind];
 
-  const formHTML=formFields.map(([key,label,type="text"])=>{
-    let control;
+  const formHTML=formFields.map(
+    ([key,label,type="text"])=>{
+      let control;
 
-    if(type==="textarea"){
-      control=`<textarea name="${key}">${esc(existing?.[key]||"")}</textarea>`;
-    }else if(type==="select"){
-      control=`<select name="${key}">
-        ${["數學","理化","生物","其他"].map(s=>`
-          <option ${existing?.[key]===s?"selected":""}>${s}</option>
-        `).join("")}
-      </select>`;
-    }else{
-      const value=existing?.[key]??
-        (type==="date"?today():"");
+      if(type==="textarea"){
+        control=`
+          <textarea name="${key}">${esc(
+            existing?.[key]||""
+          )}</textarea>
+        `;
+      }else{
+        const value=existing?.[key]??
+          (type==="date"?today():"");
 
-      control=`<input name="${key}" type="${type}"
-        value="${esc(value)}"
-        ${["title","date"].includes(key)?"required":""}
-        ${type==="number"?'min="0" step="any"':""}>`;
+        control=`
+          <input name="${key}" type="${type}"
+            value="${esc(value)}"
+            ${key==="date"?"required":""}
+            ${type==="number"
+              ?'min="0" step="any"':""}>
+        `;
+      }
+
+      return `
+        <label class="${type==="textarea"?"full":""}">
+          ${label}
+          ${control}
+        </label>
+      `;
     }
-
-    return `
-      <label class="${type==="textarea"?"full":""}">
-        ${label}
-        ${control}
-      </label>
-    `;
-  }).join("");
+  ).join("");
 
   $("#content").innerHTML=`
     <h2>${existing?"編輯":"新增"}${names[kind]}</h2>
+
     <form id="entryForm" class="formgrid">
+      ${curriculumSelectorHTML(existing||{})}
+
+      <label class="full">
+        名稱／主題
+        <input id="recordTitle" name="title" required
+          value="${esc(existing?.title||"")}"
+          placeholder="選擇章節後會自動帶入">
+      </label>
+
       ${formHTML}
+
       <div class="actions full">
         <button type="submit">儲存</button>
-        <button type="button" class="secondary" id="cancel">取消</button>
+        <button type="button" class="secondary"
+          id="cancel">取消</button>
       </div>
     </form>
   `;
+
+  setupCurriculumSelector(existing||{});
+  bindTitleTracking();
+
+  if(existing){
+    $("#recordTitle").dataset.manual="true";
+  }else{
+    autoFillTitle();
+  }
 
   $("#cancel").onclick=render;
 
   $("#entryForm").onsubmit=async e=>{
     e.preventDefault();
 
-    const data=Object.fromEntries(new FormData(e.target));
+    const data=Object.fromEntries(
+      new FormData(e.target)
+    );
 
-    for(const key of ["score","total","completion"]){
-      if(key in data)data[key]=Number(data[key]);
+    delete data.sections;
+
+    Object.assign(data,selectedCurriculum());
+
+    for(const key of [
+      "score","total","completion"
+    ]){
+      if(key in data){
+        data[key]=Number(data[key]);
+      }
     }
 
     if(kind==="grades"&&
-      (!(data.total>0)||data.score<0||data.score>data.total)){
+      (!(data.total>0)||
+       data.score<0||
+       data.score>data.total)){
       msg("分數需介於 0 與滿分之間",true);
       return;
     }
 
     if(kind==="progress"&&
-      (data.completion<0||data.completion>100)){
+      (data.completion<0||
+       data.completion>100)){
       msg("完成進度請填 0～100",true);
       return;
     }
@@ -772,7 +1097,9 @@ function editStandard(kind,existing=null){
 
     try{
       if(existing){
-        await updateDoc(doc(db,kind,existing.id),data);
+        await updateDoc(
+          doc(db,kind,existing.id),data
+        );
       }else{
         await addDoc(collection(db,kind),{
           ...data,
@@ -801,45 +1128,79 @@ async function remove(kind,id){
   }
 }
 
+/* ===========================
+   成績圖表
+=========================== */
+
 function drawChart(){
   const arr=[...(cache.grades||[])]
-    .sort((a,b)=>(a.date||"").localeCompare(b.date||""))
+    .sort((a,b)=>
+      (a.date||"").localeCompare(b.date||"")
+    )
     .filter(x=>Number(x.total)>0);
 
   const width=Math.max(500,arr.length*75);
 
   const points=arr.map((x,i)=>({
-    x:50+i*(width-90)/Math.max(1,arr.length-1),
-    y:210-Number(x.score)/Number(x.total)*170
+    x:50+i*(width-90)/Math.max(
+      1,arr.length-1
+    ),
+    y:210-Number(x.score)/
+      Number(x.total)*170
   }));
 
   $("#content").innerHTML=`
     <h2>成績趨勢</h2>
-    <p class="muted">以得分百分比比較歷次測驗。</p>
+    <p class="muted">
+      以得分百分比比較歷次測驗。
+    </p>
+
     ${arr.length?`
       <div style="overflow-x:auto">
         <svg width="${width}" height="260"
           viewBox="0 0 ${width} 260"
           role="img" aria-label="考試成績折線圖">
-          <line x1="45" y1="40" x2="45" y2="210"
+
+          <line x1="45" y1="40"
+            x2="45" y2="210"
             stroke="#94a3b8"/>
+
           <line x1="45" y1="210"
             x2="${width-25}" y2="210"
             stroke="#94a3b8"/>
+
           ${[0,50,100].map(v=>`
-            <text x="7" y="${214-v*1.7}"
-              font-size="12">${v}%</text>
+            <text x="7"
+              y="${214-v*1.7}"
+              font-size="12">
+              ${v}%
+            </text>
           `).join("")}
+
           <polyline
-            points="${points.map(p=>p.x+","+p.y).join(" ")}"
-            fill="none" stroke="#2563eb" stroke-width="3"/>
+            points="${points.map(
+              p=>p.x+","+p.y
+            ).join(" ")}"
+            fill="none"
+            stroke="#2563eb"
+            stroke-width="3"/>
+
           ${points.map((p,i)=>`
-            <circle cx="${p.x}" cy="${p.y}" r="5"
+            <circle
+              cx="${p.x}"
+              cy="${p.y}"
+              r="5"
               fill="#2563eb">
-              <title>${esc(arr[i].title)}</title>
+              <title>
+                ${esc(arr[i].title)}
+              </title>
             </circle>
-            <text x="${p.x-20}" y="235" font-size="11">
-              ${esc((arr[i].date||"").slice(5))}
+
+            <text x="${p.x-20}"
+              y="235" font-size="11">
+              ${esc(
+                (arr[i].date||"").slice(5)
+              )}
             </text>
           `).join("")}
         </svg>
@@ -853,43 +1214,63 @@ function drawChart(){
 =========================== */
 
 async function loadStudents(){
-  const snap=await getDocs(collection(db,"users"));
+  const snap=await getDocs(
+    collection(db,"users")
+  );
 
   students=snap.docs.map(d=>({
     uid:d.id,...d.data()
   }))
-  .filter(x=>x.role==="student"&&x.active===true)
-  .sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+  .filter(x=>
+    x.role==="student"&&
+    x.active===true
+  )
+  .sort((a,b)=>
+    (a.name||"").localeCompare(b.name||"")
+  );
 
-  $("#studentPicker").innerHTML=students.map(s=>`
-    <option value="${esc(s.uid)}">
-      ${esc(s.name||s.uid)}
-    </option>
-  `).join("");
+  $("#studentPicker").innerHTML=
+    students.map(s=>`
+      <option value="${esc(s.uid)}">
+        ${esc(s.name||s.uid)}
+      </option>
+    `).join("");
 
-  selected=students.some(x=>x.uid===selected)
+  selected=students.some(
+    x=>x.uid===selected
+  )
     ?selected
     :(students[0]?.uid||"");
 
   $("#studentPicker").value=selected;
-  $("#studentPickerWrap").classList.remove("hide");
+  $("#studentPickerWrap")
+    .classList.remove("hide");
 }
 
 function setLoginMode(mode){
   loginMode=mode;
 
   $("#accountLabel").textContent=
-    mode==="student"?"英文帳號":"電子郵件";
+    mode==="student"
+      ?"英文帳號":"電子郵件";
 
-  const input=$('#loginForm [name="account"]');
-  input.type=mode==="student"?"text":"email";
+  const input=$(
+    '#loginForm [name="account"]'
+  );
+
+  input.type=mode==="student"
+    ?"text":"email";
+
   input.placeholder=mode==="student"
-    ?"例如 liwen":"例如 teacher@gmail.com";
+    ?"例如 liwen"
+    :"例如 teacher@gmail.com";
+
   input.value="";
 
   $("#studentMode").classList.toggle(
     "secondary",mode!=="student"
   );
+
   $("#teacherMode").classList.toggle(
     "secondary",mode!=="teacher"
   );
@@ -897,8 +1278,11 @@ function setLoginMode(mode){
   msg("");
 }
 
-$("#studentMode").onclick=()=>setLoginMode("student");
-$("#teacherMode").onclick=()=>setLoginMode("teacher");
+$("#studentMode").onclick=()=>
+  setLoginMode("student");
+
+$("#teacherMode").onclick=()=>
+  setLoginMode("teacher");
 
 $("#studentPicker").onchange=async e=>{
   selected=e.target.value;
@@ -910,13 +1294,19 @@ $("#loginForm").onsubmit=async e=>{
   e.preventDefault();
 
   const f=new FormData(e.target);
-  let account=String(f.get("account")||"").trim();
+
+  let account=String(
+    f.get("account")||""
+  ).trim();
 
   if(loginMode==="student"){
     account=account.toLowerCase();
 
     if(!/^[a-z][a-z0-9_]{2,19}$/.test(account)){
-      msg("英文帳號需以英文字母開頭，長度 3～20 字，只能使用英文、數字及底線",true);
+      msg(
+        "英文帳號需以英文字母開頭，長度 3～20 字，只能使用英文、數字及底線",
+        true
+      );
       return;
     }
 
@@ -925,10 +1315,15 @@ $("#loginForm").onsubmit=async e=>{
 
   try{
     await signInWithEmailAndPassword(
-      auth,account,String(f.get("password")||"")
+      auth,
+      account,
+      String(f.get("password")||"")
     );
   }catch(error){
-    msg("登入失敗，請確認帳號密碼",true);
+    msg(
+      "登入失敗，請確認帳號密碼",
+      true
+    );
   }
 };
 
@@ -937,9 +1332,17 @@ $("#logout").onclick=()=>signOut(auth);
 onAuthStateChanged(auth,async user=>{
   me=user;
 
-  $("#login").classList.toggle("hide",!!user);
-  $("#app").classList.toggle("hide",!user);
-  $("#logout").classList.toggle("hide",!user);
+  $("#login").classList.toggle(
+    "hide",!!user
+  );
+
+  $("#app").classList.toggle(
+    "hide",!user
+  );
+
+  $("#logout").classList.toggle(
+    "hide",!user
+  );
 
   if(!user){
     profile=null;
@@ -950,33 +1353,52 @@ onAuthStateChanged(auth,async user=>{
   }
 
   try{
-    const snap=await getDoc(doc(db,"users",user.uid));
+    const snap=await getDoc(
+      doc(db,"users",user.uid)
+    );
 
-    if(!snap.exists()||
-       !["teacher","student"].includes(snap.data().role)||
-       snap.data().active!==true){
+    if(
+      !snap.exists()||
+      !["teacher","student"].includes(
+        snap.data().role
+      )||
+      snap.data().active!==true
+    ){
       await signOut(auth);
-      msg("帳號尚未設定身分或已停用",true);
+
+      msg(
+        "帳號尚未設定身分或已停用",
+        true
+      );
       return;
     }
 
     profile=snap.data();
 
     $("#welcome").textContent=
-      "你好，"+(profile.name||user.email);
+      "你好，"+
+      (profile.name||user.email);
 
-    $("#roleInfo").textContent=isAdmin()
-      ?"老師管理後台":"我的學習紀錄";
+    $("#roleInfo").textContent=
+      isAdmin()
+        ?"老師管理後台"
+        :"我的學習紀錄";
 
-    $("#studentPickerWrap").classList.toggle(
-      "hide",!isAdmin()
-    );
+    $("#studentPickerWrap")
+      .classList.toggle(
+        "hide",!isAdmin()
+      );
 
-    if(isAdmin())await loadStudents();
+    if(isAdmin()){
+      await loadStudents();
+    }
 
     await reload();
   }catch(error){
-    msg("初始化失敗："+error.message,true);
+    msg(
+      "初始化失敗："+error.message,
+      true
+    );
   }
 });
 </script>
