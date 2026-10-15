@@ -177,18 +177,21 @@ import {initializeApp} from
 
 import {
   getAuth,onAuthStateChanged,
-  signInWithEmailAndPassword,signOut
+  signInWithEmailAndPassword,signOut,createUserWithEmailAndPassword
 } from
 "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
 import {
   getFirestore,doc,getDoc,collection,query,where,
-  getDocs,addDoc,updateDoc,deleteDoc,serverTimestamp
+  getDocs,addDoc,updateDoc,deleteDoc,serverTimestamp,setDoc
 } from
 "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const firebaseApp=initializeApp(firebaseConfig);
 const auth=getAuth(firebaseApp);
+// 使用獨立 Firebase App 建立學生，避免老師被登出
+const studentCreationApp=initializeApp(firebaseConfig,"student-creation");
+const studentCreationAuth=getAuth(studentCreationApp);
 const db=getFirestore(firebaseApp);
 const $=s=>document.querySelector(s);
 
@@ -206,7 +209,8 @@ const names={
   charts:"成績圖表",
   materials:"教材中心",
   mistakes:"錯題追蹤",
-  attendance:"出席紀錄"
+  attendance:"出席紀錄",
+  students:"學生管理"
 };
 
 const fields={
@@ -648,7 +652,7 @@ function render(){
     </div>
   `).join("");
 
-  $("#tabs").innerHTML=Object.entries(names).map(
+  $("#tabs").innerHTML=Object.entries(names).filter(([key])=>key!=="students"||isAdmin()).map(
     ([key,label])=>`
       <button data-tab="${key}"
         class="${tab===key?"active":""}">
@@ -663,6 +667,11 @@ function render(){
       render();
     };
   });
+
+  if(tab==="students"&&isAdmin()){
+    renderStudentManagement();
+    return;
+  }
 
   if(!activeUid()){
     $("#content").innerHTML=
@@ -1596,6 +1605,81 @@ function drawChart(){
       </div>
     `:'<div class="empty">尚無考試成績</div>'}
   `;
+}
+
+
+/* ========= 學生管理 ========= */
+function renderStudentManagement(){
+  if(!isAdmin())return;
+  $("#content").innerHTML=`
+    <h2>👥 學生管理</h2>
+    <p class="muted">新增學生後，會自動建立登入帳號和學生資料。老師不會被登出。</p>
+    <form id="createStudentForm" class="formgrid">
+      <label>學生姓名<input name="name" required maxlength="40" placeholder="例如：王小明"></label>
+      <label>英文帳號<input name="username" required minlength="3" maxlength="20" pattern="[a-zA-Z][a-zA-Z0-9_]{2,19}" placeholder="例如：xiaoming"></label>
+      <label>初始密碼<input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="至少 6 碼"></label>
+      <div class="actions full"><button type="submit">＋建立學生帳號</button></div>
+    </form>
+    <h3>目前學生（${students.length} 位）</h3>
+    <div id="manageStudentList">${students.length?students.map(s=>`
+      <div class="item">
+        <div class="top"><div><strong>${esc(s.name||"未命名")}</strong><p class="muted">${esc(s.username||"（舊帳號）")}</p></div>
+        <button class="secondary" data-rename-student="${esc(s.uid)}">修改姓名</button></div>
+      </div>`).join(""):'<div class="empty">目前沒有學生</div>'}</div>
+    <p class="muted">修改姓名不會改變登入帳號。重設密碼及刪除登入帳號仍需至 Firebase Authentication 操作。</p>
+  `;
+  $("#createStudentForm").onsubmit=async e=>{
+    e.preventDefault();
+    const form=e.target, button=form.querySelector('button[type="submit"]');
+    const f=new FormData(form);
+    const name=String(f.get("name")||"").trim();
+    const username=String(f.get("username")||"").trim().toLowerCase();
+    const password=String(f.get("password")||"");
+    if(!name||!/^[a-z][a-z0-9_]{2,19}$/.test(username)||password.length<6){
+      msg("請確認姓名、英文帳號與至少 6 碼的密碼",true);return;
+    }
+    const email=username+"@students.example.com";
+    button.disabled=true;
+    let createdUid="";
+    try{
+      // secondary auth 與老師 auth 完全獨立
+      const result=await createUserWithEmailAndPassword(studentCreationAuth,email,password);
+      createdUid=result.user.uid;
+      await setDoc(doc(db,"users",createdUid),{
+        name,username,role:"student",active:true
+      });
+      await signOut(studentCreationAuth);
+      await loadStudents();
+      msg(`已建立學生：${name}（帳號 ${username}）`);
+      renderStudentManagement();
+    }catch(error){
+      if(createdUid){
+        msg("登入帳號已建立，但學生資料儲存失敗。請到 Firebase Authentication 檢查該帳號，避免重複建立。錯誤："+error.message,true);
+      }else{
+        msg("新增失敗："+error.message,true);
+      }
+      button.disabled=false;
+      try{await signOut(studentCreationAuth);}catch(_e){}
+    }
+  };
+  $("#manageStudentList").querySelectorAll("[data-rename-student]").forEach(b=>{
+    b.onclick=async()=>{
+      const uid=b.dataset.renameStudent;
+      const student=students.find(s=>s.uid===uid);
+      if(!student)return;
+      const name=prompt("請輸入新的學生姓名",student.name||"");
+      if(name===null)return;
+      const newName=name.trim();
+      if(!newName||newName.length>40){msg("姓名不可為空白，最多 40 字",true);return;}
+      b.disabled=true;
+      try{
+        await updateDoc(doc(db,"users",uid),{name:newName});
+        await loadStudents();
+        msg("學生姓名已更新");
+        renderStudentManagement();
+      }catch(error){msg("修改失敗："+error.message,true);b.disabled=false;}
+    };
+  });
 }
 
 /* ========= 登入 ========= */
