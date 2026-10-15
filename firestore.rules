@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function teacher() { return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher'; }
+    function owner(data) { return signedIn() && data.studentId == request.auth.uid; }
+    function validStudent(id) { return exists(/databases/$(database)/documents/users/$(id)) && get(/databases/$(database)/documents/users/$(id)).data.role == 'student'; }
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || teacher());
+      allow list: if teacher();
+      allow create, update, delete: if false; // 帳號身分僅由 Firebase 控制台或安全的管理端建立
+    }
+    match /{kind}/{recordId} {
+      allow read: if kind in ['progress','homework','grades','materials','mistakes'] && (teacher() || owner(resource.data));
+      allow create: if kind in ['progress','homework','grades','materials','mistakes'] && teacher() && request.resource.data.studentId is string && validStudent(request.resource.data.studentId);
+      allow update: if kind in ['progress','homework','grades','materials','mistakes'] && (
+        (teacher() && request.resource.data.studentId == resource.data.studentId)
+        || (kind == 'homework' && owner(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done']) && request.resource.data.done is bool)
+      );
+      allow delete: if kind in ['progress','homework','grades','materials','mistakes'] && teacher();
+    }
+  }
+}
