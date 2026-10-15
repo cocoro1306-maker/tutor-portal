@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>家教學習中心</title>
+<title>學習角落｜我的學習小天地</title>
 <style>
 :root{
   font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;
@@ -112,14 +112,45 @@ th{background:#f8fafc}
   .formgrid,.grid,.section-list,.student-list{grid-template-columns:1fr}
   .hw-controls{width:100%}
 }
+
+/* 學習角落 · Mobile-first 可愛手帳主題 */
+:root{font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;color:#574e4b;background:#fff8ed}
+body{background:radial-gradient(circle at 85% 0%,#ffe9d5 0,transparent 33%),linear-gradient(180deg,#fff5e4,#fffaf3 45%,#f8f4eb);min-height:100vh}
+.shell{max-width:1050px;padding:16px 14px 108px}
+h1{font-size:clamp(25px,5vw,36px);margin:5px 0;color:#6e5547;letter-spacing:1px}
+h2,h3{color:#685247}h2{font-size:1.28rem}
+.top{gap:14px}.muted{color:#9b8b80}
+.panel{background:#fffefa;border:2px solid #f4e8d7;border-radius:25px;box-shadow:0 8px 0 #eadbc638,0 14px 30px #8c725417;padding:20px;margin:17px 0}
+button{border-radius:15px;background:#db8d8d;color:white;font-weight:700;min-height:43px;box-shadow:0 3px 0 #c4777770;transition:transform .12s,background .12s}
+button:active{transform:translateY(2px)}button.secondary{background:#f5e8d2;color:#795e4e;box-shadow:none}button.danger{background:#c9666b}
+input:not([type=checkbox]),select,textarea{border:2px solid #eee1d1;border-radius:14px;padding:12px;background:#fffefa;min-height:44px}
+input:focus,textarea:focus,select:focus{outline:3px solid #f4d5d8;border-color:#df9c9c}
+input[type=checkbox]{accent-color:#db8d8d}
+.stat{background:#fff0d5;border:1px solid #f2dfbd;border-radius:19px;padding:16px}
+.stat:nth-child(2){background:#fbe6e8;border-color:#f5d3d8}.stat:nth-child(3){background:#e4f2e4;border-color:#d4e9d7}
+.stat strong{font-size:29px;color:#685247}.item,.hw-day{border:2px solid #f2e8db;border-radius:19px;background:#fffefa;overflow:hidden}
+.pill{background:#f9e6ed;color:#a55d79}.status.done,.status.present{background:#dff1dc;color:#47784b}.status.correct{background:#fff0c9;color:#a27934}
+.curriculum-box,.today-card{background:linear-gradient(125deg,#fff0d6,#fff9ec);border:2px solid #f3dfc0;border-radius:21px}
+.day-head{background:#fff0d6;color:#785c48}.schedule span{border-radius:14px;border-color:#f0e2cf}
+.tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:9px;padding:4px 2px 10px;position:sticky;top:0;z-index:10;background:#fff8edf5;backdrop-filter:blur(10px)}
+.tabs::-webkit-scrollbar{display:none}.tabs button{white-space:nowrap;flex:0 0 auto;background:#f4e9d8;color:#836b5b;box-shadow:none;border:1px solid #ebddc9}
+.tabs button.active{background:#e8a2a5;color:#fff;border-color:#e8a2a5}
+.bottom-note{text-align:center;color:#ad9283;font-size:13px;margin:24px auto}
+.pet-stage{background:linear-gradient(180deg,#ffedce,#f8dfb8);border:3px solid #f2d6a4;border-radius:25px;padding:22px;text-align:center}
+.pet-emoji{font-size:88px;line-height:1.4;filter:drop-shadow(0 8px 1px #b18c5733)}
+.pet-name{font-size:24px;font-weight:850;color:#73513d}.pet-bar{height:17px;background:#fffaf0;border-radius:99px;overflow:hidden;border:1px solid #e9cfab}.pet-fill{height:100%;background:linear-gradient(90deg,#a7d7a5,#7fba8d);border-radius:99px}
+.pet-feed-list{display:grid;gap:10px;margin-top:14px}.pet-feed-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff9ef;padding:12px;border-radius:15px;border:1px solid #eee0c9}
+.diary-moods{display:flex;gap:8px;flex-wrap:wrap}.diary-moods label{display:flex;align-items:center;gap:4px;padding:8px 10px;border-radius:14px;background:#fff1e2;border:1px solid #f0ddc7}
+.diary-entry{padding:15px;border-radius:18px;background:#fff6e9;border:1px solid #f0e1cd;margin:12px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:650px){.shell{padding:12px 12px 115px}.panel{padding:15px}.formgrid,.grid,.section-list,.student-list{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hw-controls{width:100%}.tabs{position:fixed;bottom:0;top:auto;left:0;right:0;z-index:100;background:#fff8ecf7;border-top:2px solid #ecdcc7;margin:0;padding:10px 12px max(12px,env(safe-area-inset-bottom));box-shadow:0 -6px 22px #5d483419}.tabs button{min-width:87px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:55px;font-size:12px;padding:8px 10px;border-radius:14px}.pet-emoji{font-size:76px}.pet-feed-row{flex-wrap:wrap}.pet-feed-row button{width:100%}}
 </style>
 </head>
 <body>
 <div class="shell">
 <header class="top">
   <div>
-    <h1>📚 家教學習中心</h1>
-    <div class="muted">數學・理化・生物</div>
+    <h1>🌷 學習角落</h1>
+    <div class="muted">一起慢慢學，一起閃閃發光 ✨</div>
   </div>
   <button id="logout" class="secondary hide">登出</button>
 </header>
@@ -158,8 +189,9 @@ th{background:#f8fafc}
     <div id="stats" class="grid"></div>
   </section>
 
-  <nav id="tabs" class="tabs"></nav>
+  <nav id="tabs" class="tabs" aria-label="功能導覽"></nav>
   <section id="content" class="panel"></section>
+  <div class="bottom-note">🌼 每天進步一點點，就是很棒的成長！</div>
 </div>
 
 <p id="message" role="status"></p>
@@ -183,7 +215,7 @@ import {
 
 import {
   getFirestore,doc,getDoc,collection,query,where,
-  getDocs,addDoc,updateDoc,deleteDoc,serverTimestamp,setDoc
+  getDocs,addDoc,updateDoc,deleteDoc,serverTimestamp,setDoc,runTransaction
 } from
 "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
@@ -210,7 +242,9 @@ const names={
   materials:"教材中心",
   mistakes:"錯題追蹤",
   attendance:"出席紀錄",
-  students:"學生管理"
+  students:"學生管理",
+  pet:"我的小寵物",
+  diary:"心情日記"
 };
 
 const fields={
@@ -258,6 +292,8 @@ let cache={};
 let loginMode="student";
 let homeworkFilter="all";
 let initialForm=null;
+let petData=null;
+let diaryEntries=[];
 let formRecipients=[];
 
 function esc(value){
@@ -346,6 +382,8 @@ async function load(kind){
 async function reload(){
   try{
     cache={};
+    petData=null;
+    diaryEntries=[];
 
     if(!activeUid()){
       render();
@@ -359,6 +397,7 @@ async function reload(){
       cache[kind]=await load(kind);
     }
 
+    await loadExtras();
     render();
   }catch(error){
     msg("資料讀取失敗："+error.message,true);
@@ -656,7 +695,7 @@ function render(){
     ([key,label])=>`
       <button data-tab="${key}"
         class="${tab===key?"active":""}">
-        ${label}
+        ${({home:"🏠",progress:"📖",homework:"📝",grades:"⭐",charts:"📈",materials:"📚",mistakes:"🔍",attendance:"📅",students:"👩‍🏫",pet:"🐣",diary:"💌"})[key]} ${label}
       </button>
     `
   ).join("");
@@ -668,6 +707,8 @@ function render(){
     };
   });
 
+  if(tab==="pet"){renderPet();return;}
+  if(tab==="diary"){renderDiary();return;}
   if(tab==="students"&&isAdmin()){
     renderStudentManagement();
     return;
@@ -684,6 +725,77 @@ function render(){
   else if(tab==="charts")drawChart();
   else if(tab==="attendance")renderAttendance();
   else renderStandard();
+}
+
+
+/* ========= 寵物與心情日記 ========= */
+const PET_FOODS=["🥕","🍎","🍪","🍓"];
+function petLevel(x){return Math.floor((x?.xp||0)/50)+1;}
+function petAvatar(x){const l=petLevel(x);return l>=5?"🐻":l>=3?"🐱":"🐣";}
+async function loadExtras(){
+  const uid=activeUid();if(!uid)return;
+  const snap=await getDoc(doc(db,"pets",uid));
+  petData=snap.exists()?snap.data():{name:"小豆",xp:0,fedIds:[]};
+  const diarySnap=await getDocs(query(collection(db,"diaries"),where("studentId","==",uid)));
+  diaryEntries=diarySnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+}
+function renderPet(){
+  const p=petData||{name:"小豆",xp:0,fedIds:[]};
+  const xp=p.xp||0,l=petLevel(p),remaining=50-(xp%50);
+  const ready=(cache.homework||[]).filter(w=>getStatus(w)==="done"&&!((p.fedIds||[]).includes(w.id)));
+  $("#content").innerHTML=`
+    <h2>🐾 我的寵物小屋</h2><p class="muted">作業完成並經老師確認後，可以餵食寵物。每份作業只能餵一次！</p>
+    <div class="pet-stage"><div class="pet-emoji" aria-label="寵物">${petAvatar(p)}</div>
+      <div class="pet-name">${esc(p.name||"小豆")} ♡</div>
+      <p>Lv. ${l} ・ ${xp} XP ・ ${l>=5?"成熟期":l>=3?"成長期":"幼年期"}</p>
+      <div class="pet-bar"><div class="pet-fill" style="width:${(xp%50)*2}%"></div></div>
+      <p class="muted">再獲得 ${remaining} XP 就升級！</p>
+      ${!isAdmin()?'<button id="renamePet" class="secondary">✏️ 幫寵物取名字／開啟小屋</button>':""}
+    </div>
+    <h3>🍱 今天來餵食</h3>
+    ${ready.length?`<div class="pet-feed-list">${ready.map((w,i)=>`<div class="pet-feed-row"><span>${PET_FOODS[i%4]} ${esc(w.title||w.subject||"完成的作業")}</span>${isAdmin()?'<span class="muted">學生可自行餵食</span>':`<button data-feed="${esc(w.id)}">餵食 ＋10 XP</button>`}</div>`).join("")}</div>`:'<div class="empty">🌷 目前沒有可餵食的作業，繼續加油！</div>'}
+    <p class="muted">小提醒：目前是單純的學習鼓勵功能，不設排行榜，也不會因為忘記餵食而扣經驗值。</p>`;
+  $("#renamePet")?.addEventListener("click",async()=>{
+    const name=prompt("幫寵物取名字（最多 12 個字）",p.name||"小豆");
+    if(!name)return;const trimmed=name.trim();if(!trimmed||trimmed.length>12){msg("名字請設定為 1～12 個字",true);return;}
+    try{await setDoc(doc(db,"pets",activeUid()),{name:trimmed,xp:p.xp||0,fedIds:p.fedIds||[]});await loadExtras();renderPet();msg("寵物名字更新成功！");}catch(e){msg("更新失敗："+e.message,true);}
+  });
+  $("#content").querySelectorAll("[data-feed]").forEach(btn=>btn.onclick=async()=>{
+    const id=btn.dataset.feed;btn.disabled=true;
+    try{
+      await runTransaction(db,async tx=>{
+        const petRef=doc(db,"pets",activeUid());
+        const hwRef=doc(db,"homework",id);
+        const hw=await tx.get(hwRef),current=await tx.get(petRef);
+        if(!hw.exists()||hw.data().studentId!==activeUid()||hw.data().status!=="done")throw new Error("作業尚未經老師確認完成");
+        if(!current.exists())throw new Error("請先幫寵物取名字，再餵食喔！");
+        const old=current.data();
+        if((old.fedIds||[]).includes(id))throw new Error("這份作業已經餵過了");
+        tx.set(petRef,{name:old.name||"小豆",xp:(old.xp||0)+10,fedIds:[...(old.fedIds||[]),id]});
+      });
+      await loadExtras();renderPet();msg("餵食成功！寵物獲得 10 XP 🎉");
+    }catch(e){btn.disabled=false;msg("餵食失敗："+e.message,true);}
+  });
+}
+function renderDiary(){
+  $("#content").innerHTML=`<h2>💌 心情日記</h2><p class="muted">記下今天上課的心情、學到的事，只有你和老師可以查看。</p>
+    ${!isAdmin()?`<form id="diaryForm" class="formgrid"><label>上課日期<input name="date" type="date" value="${today()}" required></label>
+    <label>今天的科目<select name="subject"><option>數學</option><option>理化</option><option>生物</option><option>其他</option></select></label>
+    <div class="full"><strong>今天的心情</strong><div class="diary-moods">${["😊 開心","🙂 還不錯","😐 普通","😟 有點難過","😴 累累的"].map((m,i)=>`<label><input type="radio" name="mood" value="${m}" ${i===0?"checked":""}>${m}</label>`).join("")}</div></div>
+    <label class="full">今天想說的話<textarea name="body" maxlength="1000" placeholder="今天我學會了什麼？有什麼不懂、開心或煩惱的事？" required></textarea></label>
+    <button type="submit">🌷 儲存今天的日記</button></form>`:'<p class="muted">以下是目前選擇學生的心情日記。</p>'}
+    <h3>📖 日記小本本</h3>${diaryEntries.length?diaryEntries.map(d=>`<div class="diary-entry"><strong>${esc(d.date||"")} · ${esc(d.subject||"")} · ${esc(d.mood||"")}</strong><p>${esc(d.body||"")}</p>${isAdmin()?`<div class="muted">老師回覆：${esc(d.reply||"尚未回覆")}</div><button class="secondary" data-reply="${esc(d.id)}">✏️ 回覆學生</button>`:`${d.reply?`<p>💬 老師：${esc(d.reply)}</p>`:""}`}</div>`).join(""):'<div class="empty">還沒有日記，寫下第一篇吧 ✨</div>'}`;
+  $("#diaryForm")?.addEventListener("submit",async e=>{
+    e.preventDefault();const f=new FormData(e.target),body=String(f.get("body")||"").trim();
+    if(!body)return;const b=e.target.querySelector('button[type="submit"]');b.disabled=true;
+    try{await addDoc(collection(db,"diaries"),{studentId:activeUid(),date:String(f.get("date")),subject:String(f.get("subject")),mood:String(f.get("mood")),body,reply:"",createdAt:serverTimestamp()});await loadExtras();renderDiary();msg("日記已經保存，老師可以看到囉！");}catch(err){b.disabled=false;msg("儲存失敗："+err.message,true);}
+  });
+  $("#content").querySelectorAll("[data-reply]").forEach(btn=>btn.onclick=async()=>{
+    const entry=diaryEntries.find(x=>x.id===btn.dataset.reply);
+    const reply=prompt("給學生的溫柔回覆（最多 500 字）",entry?.reply||"");
+    if(reply===null)return;if(reply.length>500){msg("回覆不可超過 500 字",true);return;}
+    try{await updateDoc(doc(db,"diaries",btn.dataset.reply),{reply});await loadExtras();renderDiary();msg("已回覆學生");}catch(e){msg("回覆失敗："+e.message,true);}
+  });
 }
 
 /* ========= 今日首頁 ========= */
