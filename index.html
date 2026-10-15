@@ -178,12 +178,39 @@ input[type=checkbox]{accent-color:#db8d8d}
 @keyframes evoPop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes evoFall{to{transform:translateY(110vh) rotate(720deg);opacity:0}}
 @media(prefers-reduced-motion:reduce){.food-fly,.evo-popup,.evo-confetti{animation:none!important}}
+
+/* 2026-10-16：手機頂欄三欄布局，選單不再遮住登出 */
+.site-header{display:grid;grid-template-columns:54px minmax(0,1fr) 54px;align-items:center;gap:8px;position:relative;padding:8px 0 12px;min-height:76px}
+.site-brand{grid-column:2;text-align:center;min-width:0}
+.site-brand h1{font-size:clamp(21px,5.2vw,31px);white-space:nowrap;margin:0}
+.site-brand .muted{font-size:11px;line-height:1.4}
+.site-header .menu-toggle{grid-column:1;grid-row:1;position:static;z-index:1;min-width:44px;width:48px;height:48px;padding:0;display:grid;place-items:center;font-size:23px;box-shadow:none}
+.site-header #logout{grid-column:3;grid-row:1;min-width:0;width:54px;padding:9px 2px;min-height:44px;font-size:13px;white-space:nowrap;z-index:1}
+.site-header .menu-toggle.hide{display:none!important}
+@media(max-width:360px){.site-brand .muted{font-size:10px}.site-brand h1{font-size:20px}}
+/* 日記心情：大顆愛心、五等分觸控區、清楚的選取狀態 */
+.mood-section{background:#fff8f6;border:1px solid #f7e4e5;border-radius:22px;padding:17px 10px;margin:5px 0}
+.mood-section>strong{display:block;text-align:center;color:#795b62;font-size:18px}
+.mood-section>p{text-align:center;font-size:12px;margin:6px 0 13px}
+.diary-moods{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;max-width:520px;margin:auto}
+.diary-moods .mood-option{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:5px;position:relative;min-width:0;padding:4px 0 7px;border:0;background:transparent;border-radius:15px;cursor:pointer}
+.mood-option input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.mood-art{width:min(100%,76px);aspect-ratio:1;display:grid;place-items:center;position:relative;transition:transform .18s ease,filter .18s ease;filter:drop-shadow(0 3px 0 #d59b9b33)}
+.mood-art svg{position:absolute;inset:0;width:100%;height:100%}
+.mood-face{position:relative;z-index:1;color:#4b2529;font-size:clamp(18px,5vw,27px);font-weight:900;margin-top:7px;line-height:1}
+.mood-label{font-size:12px;color:#856c6f;font-weight:700;white-space:nowrap}
+.mood-option:has(input:checked){background:#fff0f2;box-shadow:inset 0 0 0 2px #e8a1b5}
+.mood-option:has(input:checked) .mood-art{transform:translateY(-5px) scale(1.10);filter:drop-shadow(0 5px 0 #d59b9b55)}
+.mood-option:focus-within{outline:3px solid #ad7695;outline-offset:2px}
+@media(max-width:390px){.mood-label{font-size:11px}.mood-section{padding:14px 7px}}
+@media(prefers-reduced-motion:reduce){.mood-art{transition:none!important}}
 </style>
 </head>
 <body>
 <div class="shell">
-<header class="top">
-  <div>
+<header class="site-header">
+  <button id="menuToggle" class="menu-toggle hide" type="button" aria-controls="tabs" aria-expanded="false" aria-label="開啟功能選單">☰</button>
+  <div class="site-brand">
     <h1>🌷 學習角落</h1>
     <div class="muted">一起慢慢學，一起閃閃發光 ✨</div>
   </div>
@@ -224,7 +251,6 @@ input[type=checkbox]{accent-color:#db8d8d}
     <div id="stats" class="grid"></div>
   </section>
 
-  <button id="menuToggle" class="menu-toggle" type="button" aria-controls="tabs" aria-expanded="false">☰ 功能選單</button>
   <div id="navShade" class="nav-shade" hidden></div>
   <nav id="tabs" class="tabs" aria-label="功能導覽"></nav>
   <section id="content" class="panel"></section>
@@ -822,7 +848,14 @@ function renderDiary(){
   $("#content").innerHTML=`<h2>💌 心情日記</h2><p class="muted">記下今天上課的心情、學到的事，只有你和老師可以查看。</p>
     ${!isAdmin()?`<form id="diaryForm" class="formgrid"><label>上課日期<input name="date" type="date" value="${today()}" required></label>
     <label>今天的科目<select name="subject"><option>數學</option><option>理化</option><option>生物</option><option>其他</option></select></label>
-    <div class="full"><strong>今天的心情</strong><div class="diary-moods">${["😊 開心","🙂 還不錯","😐 普通","😟 有點難過","😴 累累的"].map((m,i)=>`<label><input type="radio" name="mood" value="${m}" ${i===0?"checked":""}>${m}</label>`).join("")}</div></div>
+    <div class="full mood-section"><strong>💗 今天上完課，心情怎麼樣？</strong><p class="muted">選一顆心，記錄今天的感受 ♡</p>
+    <div class="diary-moods" role="radiogroup" aria-label="今天的心情">${[
+      {value:"🥰 超開心",face:"◡",label:"超開心",color:"#ffc4c5"},
+      {value:"😊 開心",face:"ᴗ",label:"開心",color:"#ff9fa5"},
+      {value:"😐 普通",face:"—",label:"普通",color:"#f47c77"},
+      {value:"😟 有點難過",face:"⌢",label:"難過",color:"#c95757"},
+      {value:"😫 好累",face:"﹏",label:"好累",color:"#9e4142"}
+    ].map((m,i)=>`<label class="mood-option" style="--mood-color:${m.color}"><input type="radio" name="mood" value="${m.value}" ${i===0?"checked":""}><span class="mood-art" aria-hidden="true"><svg viewBox="0 0 100 95" focusable="false"><path d="M50 88 C35 73 6 55 6 31 C6 8 34 2 50 22 C66 2 94 8 94 31 C94 55 65 73 50 88Z" fill="${m.color}"/></svg><span class="mood-face">${m.face}</span></span><span class="mood-label">${m.label}</span></label>`).join("")}</div></div>
     <label class="full">今天想說的話<textarea name="body" maxlength="1000" placeholder="今天我學會了什麼？有什麼不懂、開心或煩惱的事？" required></textarea></label>
     <button type="submit">🌷 儲存今天的日記</button></form>`:'<p class="muted">以下是目前選擇學生的心情日記。</p>'}
     <h3>📖 日記小本本</h3>${diaryEntries.length?diaryEntries.map(d=>`<div class="diary-entry"><strong>${esc(d.date||"")} · ${esc(d.subject||"")} · ${esc(d.mood||"")}</strong><p>${esc(d.body||"")}</p>${isAdmin()?`<div class="muted">老師回覆：${esc(d.reply||"尚未回覆")}</div><button class="secondary" data-reply="${esc(d.id)}">✏️ 回覆學生</button>`:`${d.reply?`<p>💬 老師：${esc(d.reply)}</p>`:""}`}</div>`).join(""):'<div class="empty">還沒有日記，寫下第一篇吧 ✨</div>'}`;
@@ -1932,6 +1965,7 @@ onAuthStateChanged(auth,async user=>{
   $("#login").classList.toggle("hide",!!user);
   $("#app").classList.toggle("hide",!user);
   $("#logout").classList.toggle("hide",!user);
+  $("#menuToggle").classList.toggle("hide",!user);
 
   if(!user){
     profile=null;
