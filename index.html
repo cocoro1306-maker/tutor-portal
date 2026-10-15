@@ -1,28 +1,229 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>家教學習中心</title><style>
-:root{font-family:system-ui,-apple-system,'Noto Sans TC',sans-serif;color:#213047;background:#f4f7fb}*{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button{cursor:pointer;border:0;border-radius:9px;padding:10px 14px;background:#2563eb;color:white}button.secondary{background:#e9eef8;color:#234}button.danger{background:#c43d43}input,select,textarea{padding:10px;border:1px solid #cbd5e1;border-radius:8px;width:100%;background:white}textarea{min-height:75px}.shell{max-width:1100px;margin:auto;padding:22px}.top{display:flex;align-items:center;justify-content:space-between;gap:10px}.panel{background:white;border-radius:16px;padding:20px;margin:14px 0;box-shadow:0 2px 15px #142a4910}.muted{color:#64748b}.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:15px 0}.tabs button{background:#e2e8f0;color:#334155}.tabs button.active{background:#2563eb;color:white}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.stat{padding:15px;border-radius:12px;background:#edf4ff}.stat strong{font-size:25px;display:block}.item{border:1px solid #e2e8f0;border-radius:12px;padding:13px;margin:10px 0;overflow-wrap:anywhere}.item-head{display:flex;justify-content:space-between;gap:8px;align-items:start}.pill{font-size:12px;padding:4px 8px;background:#eaf1ff;border-radius:99px;color:#2457a6}.formgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.formgrid label{display:grid;gap:5px;font-size:14px}.full{grid-column:1/-1}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.empty{padding:20px;text-align:center;color:#64748b}.chart{width:100%;max-height:280px}.error{color:#b91c1c}.success{color:#047857}.hide{display:none!important}@media(max-width:650px){.grid,.formgrid{grid-template-columns:1fr}.shell{padding:12px}.top{align-items:flex-start}.panel{padding:15px}}
-</style></head><body><div class="shell"><header class="top"><div><h1>📚 家教學習中心</h1><div class="muted" id="subtitle">國中理化・數學</div></div><button id="logout" class="secondary hide">登出</button></header><section id="login" class="panel"><h2>帳號登入</h2><form id="loginForm" class="formgrid"><label>電子郵件<input name="email" type="email" required autocomplete="username"></label><label>密碼<input name="password" type="password" required autocomplete="current-password"></label><button>登入</button></form><p class="muted">帳號由老師建立。請勿共用密碼。</p></section><div id="app" class="hide"><div class="panel"><div class="top"><div><h2 id="welcome"></h2><p class="muted" id="roleInfo"></p></div><div id="studentPickerWrap" class="hide"><label>目前管理學生 <select id="studentPicker"></select></label></div></div><div id="stats" class="grid"></div></div><nav id="tabs" class="tabs"></nav><section class="panel" id="content"></section></div><p id="message" role="status"></p></div>
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>家教學習中心</title>
+<style>
+:root{font-family:system-ui,-apple-system,'Noto Sans TC',sans-serif;color:#213047;background:#f4f7fb}
+*{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}
+button{cursor:pointer;border:0;border-radius:9px;padding:10px 14px;background:#2563eb;color:white}
+button.secondary{background:#e9eef8;color:#234}button.danger{background:#c43d43}
+input,select,textarea{padding:10px;border:1px solid #cbd5e1;border-radius:8px;width:100%;background:white}
+textarea{min-height:75px}.shell{max-width:1100px;margin:auto;padding:22px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.panel{background:white;border-radius:16px;padding:20px;margin:14px 0;box-shadow:0 2px 15px #142a4910}
+.muted{color:#64748b}.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:15px 0}
+.tabs button{background:#e2e8f0;color:#334155}.tabs button.active{background:#2563eb;color:white}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stat{padding:15px;border-radius:12px;background:#edf4ff}.stat strong{font-size:25px;display:block}
+.item{border:1px solid #e2e8f0;border-radius:12px;padding:13px;margin:10px 0;overflow-wrap:anywhere}
+.item-head{display:flex;justify-content:space-between;gap:8px;align-items:start}
+.pill{font-size:12px;padding:4px 8px;background:#eaf1ff;border-radius:99px;color:#2457a6}
+.formgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.formgrid label{display:grid;gap:5px;font-size:14px}.full{grid-column:1/-1}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.empty{padding:20px;text-align:center;color:#64748b}.error{color:#b91c1c}.success{color:#047857}
+.hide{display:none!important}
+@media(max-width:650px){.grid,.formgrid{grid-template-columns:1fr}.shell{padding:12px}.top{align-items:flex-start}.panel{padding:15px}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header class="top">
+<div><h1>📚 家教學習中心</h1><div class="muted">國中理化・數學</div></div>
+<button id="logout" class="secondary hide">登出</button>
+</header>
+<section id="login" class="panel">
+<h2>帳號登入</h2>
+<div class="actions" style="margin-bottom:14px">
+<button type="button" id="studentMode">學生登入</button>
+<button type="button" id="teacherMode" class="secondary">老師登入</button>
+</div>
+<form id="loginForm" class="formgrid">
+<label><span id="accountLabel">英文帳號</span><input name="account" type="text" required autocomplete="username" placeholder="例如 kevin88"></label>
+<label>密碼<input name="password" type="password" required autocomplete="current-password"></label>
+<button type="submit">登入</button>
+</form>
+<p class="muted">帳號由老師建立。請勿共用密碼。</p>
+</section>
+<div id="app" class="hide">
+<div class="panel">
+<div class="top">
+<div><h2 id="welcome"></h2><p class="muted" id="roleInfo"></p></div>
+<div id="studentPickerWrap" class="hide"><label>目前管理學生 <select id="studentPicker"></select></label></div>
+</div>
+<div id="stats" class="grid"></div>
+</div>
+<nav id="tabs" class="tabs"></nav>
+<section class="panel" id="content"></section>
+</div>
+<p id="message" role="status"></p>
+</div>
 <script type="module">
-// 將 firebase-config.example.js 複製成 firebase-config.js 並填入 Firebase 專案設定
 import {firebaseConfig} from './firebase-config.js';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {getFirestore,doc,getDoc,collection,query,where,getDocs,addDoc,updateDoc,deleteDoc,serverTimestamp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const names={progress:'課程進度',homework:'作業管理',grades:'考試成績',charts:'成績圖表',materials:'教材中心',mistakes:'錯題追蹤'};
-const fields={progress:[['date','日期','date'],['subject','科目','select'],['title','章節／主題'],['detail','上課內容','textarea'],['completion','完成進度（0～100）','number'],['next','下次進度']],homework:[['date','指派日期','date'],['subject','科目','select'],['title','作業名稱'],['detail','作業說明','textarea'],['due','截止日期','date']],grades:[['date','考試日期','date'],['subject','科目','select'],['title','考試名稱／範圍'],['score','得分','number'],['total','滿分','number'],['detail','老師評語','textarea']],materials:[['date','上架日期','date'],['subject','科目','select'],['title','教材名稱'],['url','教材連結','url'],['detail','說明','textarea']],mistakes:[['date','紀錄日期','date'],['subject','科目','select'],['title','錯題觀念／題型'],['detail','錯誤原因','textarea'],['advice','訂正建議','textarea']]};
-let me=null,profile=null,students=[],selected='',tab='progress',cache={};
-const $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fields={
+progress:[['date','日期','date'],['subject','科目','select'],['title','章節／主題'],['detail','上課內容','textarea'],['completion','完成進度（0～100）','number'],['next','下次進度']],
+homework:[['date','指派日期','date'],['subject','科目','select'],['title','作業名稱'],['detail','作業說明','textarea'],['due','截止日期','date']],
+grades:[['date','考試日期','date'],['subject','科目','select'],['title','考試名稱／範圍'],['score','得分','number'],['total','滿分','number'],['detail','老師評語','textarea']],
+materials:[['date','上架日期','date'],['subject','科目','select'],['title','教材名稱'],['url','教材連結','url'],['detail','說明','textarea']],
+mistakes:[['date','紀錄日期','date'],['subject','科目','select'],['title','錯題觀念／題型'],['detail','錯誤原因','textarea'],['advice','訂正建議','textarea']]
+};
+let me=null,profile=null,students=[],selected='',tab='progress',cache={},loginMode='student';
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function msg(s,error=false){$('#message').textContent=s;$('#message').className=error?'error':'success'}
-const isAdmin=()=>profile?.role==='teacher';const activeUid=()=>isAdmin()?selected:me.uid;
-async function load(kind){let q=isAdmin()?collection(db,kind):query(collection(db,kind),where('studentId','==',me.uid));let snap=await getDocs(q);return snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>!isAdmin()||x.studentId===selected).sort((a,b)=>(b.date||'').localeCompare(a.date||''));}
-async function reload(){try{cache={};for(const k of Object.keys(names).filter(x=>x!=='charts'))cache[k]=await load(k);render()}catch(e){msg('資料讀取失敗：'+e.message,true)}}
-function render(){const uid=activeUid();const works=cache.homework||[],grades=cache.grades||[],p=cache.progress||[];$('#stats').innerHTML=[['課程紀錄',p.length],['待完成作業',works.filter(x=>!x.done).length],['最近測驗',grades.length?`${grades[0].score}/${grades[0].total}`:'尚無']].map(([a,b])=>`<div class="stat"><span>${esc(a)}</span><strong>${esc(b)}</strong></div>`).join('');$('#tabs').innerHTML=Object.entries(names).map(([k,v])=>`<button data-tab="${k}" class="${tab===k?'active':''}">${v}</button>`).join('');$('#tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});if(!uid){$('#content').innerHTML='<div class="empty">請先選擇學生</div>';return}if(tab==='charts'){drawChart();return}const arr=cache[tab]||[];$('#content').innerHTML=`<h2>${names[tab]}</h2>${isAdmin()?`<button id="addBtn">＋新增${names[tab]}</button>`:''}<div id="records">${arr.length?arr.map(record).join(''):'<div class="empty">目前沒有紀錄</div>'}</div>`;if(isAdmin()){$('#addBtn').onclick=()=>edit(tab);$('#records').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>edit(tab,arr.find(x=>x.id===b.dataset.edit)));$('#records').querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>remove(tab,b.dataset.delete))}if(tab==='homework'&&!isAdmin())$('#records').querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>toggleDone(b.dataset.done,arr.find(x=>x.id===b.dataset.done)))}
-function record(x){let score=x.score!==undefined?`<b>${esc(x.score)} / ${esc(x.total)}（${Number(x.total)>0?Math.round(Number(x.score)/Number(x.total)*100):0}%）</b>`:'';let link=tab==='materials'&&/^https:\/\//i.test(x.url||'')?`<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">開啟教材 ↗</a>`:'';return `<article class="item"><div class="item-head"><div><span class="pill">${esc(x.subject||'未分類')}</span> <small class="muted">${esc(x.date)}</small><h3>${esc(x.title)}</h3></div>${score}</div><p>${esc(x.detail||'')}</p>${x.completion!==undefined?`<p>完成進度：${esc(x.completion)}%</p>`:''}${x.next?`<p>下次：${esc(x.next)}</p>`:''}${x.due?`<p>截止：${esc(x.due)}</p>`:''}${x.advice?`<p>訂正建議：${esc(x.advice)}</p>`:''}${link}<div class="actions">${tab==='homework'?`<span class="pill">${x.done?'已完成':'待完成'}</span>`:''}${tab==='homework'&&!isAdmin()?`<button class="secondary" data-done="${esc(x.id)}">${x.done?'改為未完成':'標記完成'}</button>`:''}${isAdmin()?`<button class="secondary" data-edit="${esc(x.id)}">編輯</button><button class="danger" data-delete="${esc(x.id)}">刪除</button>`:''}</div></article>`}
-function edit(kind,existing=null){const f=fields[kind];let html=`<h2>${existing?'編輯':'新增'}${names[kind]}</h2><form id="entryForm" class="formgrid">${f.map(([key,label,type='text'])=>`<label class="${type==='textarea'?'full':''}">${label}${type==='textarea'?`<textarea name="${key}">${esc(existing?.[key]||'')}</textarea>`:type==='select'?`<select name="${key}">${['理化','數學','其他'].map(s=>`<option ${existing?.[key]===s?'selected':''}>${s}</option>`).join('')}</select>`:`<input name="${key}" type="${type}" value="${esc(existing?.[key]??(type==='date'?new Date().toLocaleDateString('en-CA'):''))}" ${['title','date'].includes(key)?'required':''} ${type==='number'?'min="0" step="any"':''}>`}</label>`).join('')}<div class="actions full"><button type="submit">儲存</button><button type="button" class="secondary" id="cancel">取消</button></div></form>`;$('#content').innerHTML=html;$('#cancel').onclick=render;$('#entryForm').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));for(const k of ['score','total','completion'])if(k in data)data[k]=Number(data[k]);if(kind==='grades'&&(!(data.total>0)||data.score<0||data.score>data.total)){msg('分數需介於 0 和滿分之間，且滿分大於 0',true);return}if(kind==='progress'&&(data.completion<0||data.completion>100)){msg('完成進度請填 0～100',true);return}if(kind==='materials'&&!/^https:\/\//i.test(data.url)){msg('教材連結必須以 https:// 開頭',true);return}try{if(existing)await updateDoc(doc(db,kind,existing.id),data);else await addDoc(collection(db,kind),{...data,studentId:selected,done:false,createdAt:serverTimestamp()});msg('已儲存');await reload()}catch(err){msg(err.message,true)}}}
-async function remove(kind,id){if(!confirm('確定刪除這筆紀錄？'))return;try{await deleteDoc(doc(db,kind,id));msg('已刪除');await reload()}catch(e){msg(e.message,true)}}
-async function toggleDone(id,x){try{await updateDoc(doc(db,'homework',id),{done:!x.done});await reload()}catch(e){msg(e.message,true)}}
-function drawChart(){const arr=[...(cache.grades||[])].reverse().filter(x=>Number(x.total)>0);const points=arr.map((x,i)=>({x:50+i*(Math.max(500,arr.length*75)-90)/Math.max(1,arr.length-1),y:210-Number(x.score)/Number(x.total)*170}));let line=points.map(p=>`${p.x},${p.y}`).join(' ');$('#content').innerHTML=`<h2>成績趨勢</h2><p class="muted">各次測驗以得分百分比呈現，滿分不同也可比較。橫軸依日期排列。</p>${arr.length?`<div style="overflow-x:auto"><svg role="img" aria-label="歷次考試成績折線圖" width="${Math.max(500,arr.length*75)}" height="260" viewBox="0 0 ${Math.max(500,arr.length*75)} 260"><line x1="45" y1="40" x2="45" y2="210" stroke="#94a3b8"/><line x1="45" y1="210" x2="${Math.max(500,arr.length*75)-25}" y2="210" stroke="#94a3b8"/>${[0,50,100].map(v=>`<text x="7" y="${214-v*1.7}" font-size="12">${v}%</text>`).join('')}<polyline points="${line}" fill="none" stroke="#2563eb" stroke-width="3"/>${points.map((p,i)=>`<circle cx="${p.x}" cy="${p.y}" r="5" fill="#2563eb"><title>${esc(arr[i].title)}：${Math.round(arr[i].score/arr[i].total*100)}%</title></circle><text x="${p.x-20}" y="235" font-size="11">${esc(arr[i].date.slice(5))}</text>`).join('')}</svg></div>`:'<div class="empty">尚無考試成績</div>'}`}
-async function loadStudents(){let snap=await getDocs(collection(db,'users'));students=snap.docs.map(d=>({uid:d.id,...d.data()})).filter(x=>x.role==='student').sort((a,b)=>(a.name||'').localeCompare(b.name||''));$('#studentPicker').innerHTML=students.map(s=>`<option value="${esc(s.uid)}">${esc(s.name||s.uid)}</option>`).join('');selected=students.some(x=>x.uid===selected)?selected:(students[0]?.uid||'');$('#studentPicker').value=selected;$('#studentPickerWrap').classList.remove('hide')}
-$('#studentPicker').onchange=async e=>{selected=e.target.value;await reload()};$('#loginForm').onsubmit=async e=>{e.preventDefault();try{const f=new FormData(e.target);await signInWithEmailAndPassword(auth,f.get('email'),f.get('password'));msg('登入成功')}catch(e){msg('登入失敗，請確認帳號密碼',true)}};$('#logout').onclick=()=>signOut(auth);
-onAuthStateChanged(auth,async u=>{me=u;$('#login').classList.toggle('hide',!!u);$('#app').classList.toggle('hide',!u);$('#logout').classList.toggle('hide',!u);if(!u){profile=null;msg('');return}try{const snap=await getDoc(doc(db,'users',u.uid));if(!snap.exists()||!['teacher','student'].includes(snap.data().role)){msg('帳號尚未設定身分，請聯絡老師',true);await signOut(auth);return}profile=snap.data();$('#welcome').textContent=`你好，${profile.name||u.email}`;$('#roleInfo').textContent=isAdmin()?'老師管理後台':'我的學習紀錄';$('#studentPickerWrap').classList.toggle('hide',!isAdmin());if(isAdmin())await loadStudents();await reload()}catch(e){msg('初始化失敗：'+e.message,true)}});
-</script></body></html>
+const isAdmin=()=>profile?.role==='teacher';
+const activeUid=()=>isAdmin()?selected:me?.uid;
+async function load(kind){
+const q=isAdmin()?query(collection(db,kind),where('studentId','==',selected)):query(collection(db,kind),where('studentId','==',me.uid));
+const snap=await getDocs(q);
+return snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+}
+async function reload(){
+try{
+cache={};
+if(!activeUid()){render();return}
+for(const k of Object.keys(names).filter(x=>x!=='charts'))cache[k]=await load(k);
+render();
+}catch(e){msg('資料讀取失敗：'+e.message,true)}
+}
+function render(){
+const uid=activeUid(),works=cache.homework||[],grades=cache.grades||[],p=cache.progress||[];
+$('#stats').innerHTML=[['課程紀錄',p.length],['待完成作業',works.filter(x=>!x.done).length],['最近測驗',grades.length?grades[0].score+'/'+grades[0].total:'尚無']].map(([a,b])=>'<div class="stat"><span>'+esc(a)+'</span><strong>'+esc(b)+'</strong></div>').join('');
+$('#tabs').innerHTML=Object.entries(names).map(([k,v])=>'<button data-tab="'+k+'" class="'+(tab===k?'active':'')+'">'+v+'</button>').join('');
+$('#tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});
+if(!uid){$('#content').innerHTML='<div class="empty">請先選擇學生</div>';return}
+if(tab==='charts'){drawChart();return}
+const arr=cache[tab]||[];
+$('#content').innerHTML='<h2>'+names[tab]+'</h2>'+(isAdmin()?'<button id="addBtn">＋新增'+names[tab]+'</button>':'')+'<div id="records">'+(arr.length?arr.map(record).join(''):'<div class="empty">目前沒有紀錄</div>')+'</div>';
+if(isAdmin()){
+$('#addBtn').onclick=()=>edit(tab);
+$('#records').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>edit(tab,arr.find(x=>x.id===b.dataset.edit)));
+$('#records').querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>remove(tab,b.dataset.delete));
+}
+if(tab==='homework'&&!isAdmin())$('#records').querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>toggleDone(b.dataset.done,arr.find(x=>x.id===b.dataset.done)));
+}
+function record(x){
+const score=x.score!==undefined?'<b>'+esc(x.score)+' / '+esc(x.total)+'（'+(Number(x.total)>0?Math.round(Number(x.score)/Number(x.total)*100):0)+'%）</b>':'';
+const link=tab==='materials'&&/^https:\/\//i.test(x.url||'')?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">開啟教材 ↗</a>':'';
+return '<article class="item"><div class="item-head"><div><span class="pill">'+esc(x.subject||'未分類')+'</span> <small class="muted">'+esc(x.date)+'</small><h3>'+esc(x.title)+'</h3></div>'+score+'</div><p>'+esc(x.detail||'')+'</p>'+
+(x.completion!==undefined?'<p>完成進度：'+esc(x.completion)+'%</p>':'')+
+(x.next?'<p>下次：'+esc(x.next)+'</p>':'')+
+(x.due?'<p>截止：'+esc(x.due)+'</p>':'')+
+(x.advice?'<p>訂正建議：'+esc(x.advice)+'</p>':'')+link+
+'<div class="actions">'+(tab==='homework'?'<span class="pill">'+(x.done?'已完成':'待完成')+'</span>':'')+
+(tab==='homework'&&!isAdmin()?'<button class="secondary" data-done="'+esc(x.id)+'">'+(x.done?'改為未完成':'標記完成')+'</button>':'')+
+(isAdmin()?'<button class="secondary" data-edit="'+esc(x.id)+'">編輯</button><button class="danger" data-delete="'+esc(x.id)+'">刪除</button>':'')+'</div></article>';
+}
+function edit(kind,existing=null){
+const f=fields[kind];
+const html='<h2>'+(existing?'編輯':'新增')+names[kind]+'</h2><form id="entryForm" class="formgrid">'+f.map(([key,label,type='text'])=>{
+let control;
+if(type==='textarea')control='<textarea name="'+key+'">'+esc(existing?.[key]||'')+'</textarea>';
+else if(type==='select')control='<select name="'+key+'">'+['理化','數學','其他'].map(s=>'<option '+(existing?.[key]===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
+else control='<input name="'+key+'" type="'+type+'" value="'+esc(existing?.[key]??(type==='date'?new Date().toLocaleDateString('en-CA'):''))+'" '+(['title','date'].includes(key)?'required':'')+' '+(type==='number'?'min="0" step="any"':'')+'>';
+return '<label class="'+(type==='textarea'?'full':'')+'">'+label+control+'</label>';
+}).join('')+'<div class="actions full"><button type="submit">儲存</button><button type="button" class="secondary" id="cancel">取消</button></div></form>';
+$('#content').innerHTML=html;
+$('#cancel').onclick=render;
+$('#entryForm').onsubmit=async e=>{
+e.preventDefault();
+const data=Object.fromEntries(new FormData(e.target));
+for(const k of ['score','total','completion'])if(k in data)data[k]=Number(data[k]);
+if(kind==='grades'&&(!(data.total>0)||data.score<0||data.score>data.total)){msg('分數需介於 0 和滿分之間，且滿分大於 0',true);return}
+if(kind==='progress'&&(data.completion<0||data.completion>100)){msg('完成進度請填 0～100',true);return}
+if(kind==='materials'&&!/^https:\/\//i.test(data.url)){msg('教材連結必須以 https:// 開頭',true);return}
+try{
+if(existing)await updateDoc(doc(db,kind,existing.id),data);
+else await addDoc(collection(db,kind),{...data,studentId:selected,done:false,createdAt:serverTimestamp()});
+msg('已儲存');await reload();
+}catch(err){msg(err.message,true)}
+};
+}
+async function remove(kind,id){
+if(!confirm('確定刪除這筆紀錄？'))return;
+try{await deleteDoc(doc(db,kind,id));msg('已刪除');await reload()}catch(e){msg(e.message,true)}
+}
+async function toggleDone(id,x){
+try{await updateDoc(doc(db,'homework',id),{done:!x.done});await reload()}catch(e){msg(e.message,true)}
+}
+function drawChart(){
+const arr=[...(cache.grades||[])].reverse().filter(x=>Number(x.total)>0);
+const width=Math.max(500,arr.length*75);
+const points=arr.map((x,i)=>({x:50+i*(width-90)/Math.max(1,arr.length-1),y:210-Number(x.score)/Number(x.total)*170}));
+const line=points.map(p=>p.x+','+p.y).join(' ');
+$('#content').innerHTML='<h2>成績趨勢</h2><p class="muted">各次測驗以得分百分比呈現，滿分不同也可比較。橫軸依日期排列。</p>'+
+(arr.length?'<div style="overflow-x:auto"><svg role="img" aria-label="歷次考試成績折線圖" width="'+width+'" height="260" viewBox="0 0 '+width+' 260"><line x1="45" y1="40" x2="45" y2="210" stroke="#94a3b8"/><line x1="45" y1="210" x2="'+(width-25)+'" y2="210" stroke="#94a3b8"/>'+
+[0,50,100].map(v=>'<text x="7" y="'+(214-v*1.7)+'" font-size="12">'+v+'%</text>').join('')+
+'<polyline points="'+line+'" fill="none" stroke="#2563eb" stroke-width="3"/>'+
+points.map((p,i)=>'<circle cx="'+p.x+'" cy="'+p.y+'" r="5" fill="#2563eb"><title>'+esc(arr[i].title)+'：'+Math.round(arr[i].score/arr[i].total*100)+'%</title></circle><text x="'+(p.x-20)+'" y="235" font-size="11">'+esc(arr[i].date.slice(5))+'</text>').join('')+
+'</svg></div>':'<div class="empty">尚無考試成績</div>');
+}
+async function loadStudents(){
+const snap=await getDocs(collection(db,'users'));
+students=snap.docs.map(d=>({uid:d.id,...d.data()})).filter(x=>x.role==='student'&&x.active!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+$('#studentPicker').innerHTML=students.map(s=>'<option value="'+esc(s.uid)+'">'+esc(s.name||s.uid)+'</option>').join('');
+selected=students.some(x=>x.uid===selected)?selected:(students[0]?.uid||'');
+$('#studentPicker').value=selected;
+$('#studentPickerWrap').classList.remove('hide');
+}
+function setLoginMode(mode){
+loginMode=mode;
+$('#accountLabel').textContent=mode==='student'?'英文帳號':'電子郵件';
+const input=$('#loginForm [name=account]');
+input.type=mode==='student'?'text':'email';
+input.placeholder=mode==='student'?'例如 kevin88':'例如 teacher@gmail.com';
+input.value='';
+$('#studentMode').classList.toggle('secondary',mode!=='student');
+$('#teacherMode').classList.toggle('secondary',mode!=='teacher');
+msg('');
+}
+$('#studentMode').onclick=()=>setLoginMode('student');
+$('#teacherMode').onclick=()=>setLoginMode('teacher');
+$('#studentPicker').onchange=async e=>{selected=e.target.value;await reload()};
+$('#loginForm').onsubmit=async e=>{
+e.preventDefault();
+try{
+const f=new FormData(e.target);
+let account=String(f.get('account')||'').trim();
+if(loginMode==='student'){
+account=account.toLowerCase();
+if(!/^[a-z][a-z0-9_]{2,19}$/.test(account)){msg('英文帳號需以英文字母開頭，長度 3～20 字，只能使用英文、數字及底線',true);return}
+account+='@students.example.com';
+}
+await signInWithEmailAndPassword(auth,account,String(f.get('password')||''));
+msg('登入成功');
+}catch(err){msg('登入失敗，請確認帳號密碼',true)}
+};
+$('#logout').onclick=()=>signOut(auth);
+onAuthStateChanged(auth,async u=>{
+me=u;
+$('#login').classList.toggle('hide',!!u);
+$('#app').classList.toggle('hide',!u);
+$('#logout').classList.toggle('hide',!u);
+if(!u){profile=null;msg('');return}
+try{
+const snap=await getDoc(doc(db,'users',u.uid));
+if(!snap.exists()||!['teacher','student'].includes(snap.data().role)||snap.data().active===false){
+await signOut(auth);msg('帳號尚未設定身分，請聯絡老師',true);return;
+}
+profile=snap.data();
+if((loginMode==='student'&&profile.role!=='student')||(loginMode==='teacher'&&profile.role!=='teacher')){
+await signOut(auth);msg('請選擇正確的登入身分',true);return;
+}
+$('#welcome').textContent='你好，'+(profile.name||u.email);
+$('#roleInfo').textContent=isAdmin()?'老師管理後台':'我的學習紀錄';
+$('#studentPickerWrap').classList.toggle('hide',!isAdmin());
+if(isAdmin())await loadStudents();
+await reload();
+}catch(e){msg('初始化失敗：'+e.message,true)}
+});
+</script>
+</body>
+</html>
