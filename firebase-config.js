@@ -1,5 +1,5 @@
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyBUbLLqw5k3L15OoPFOib99kdg1uuzO_j4",
   authDomain: "junior-high-school-91081.firebaseapp.com",
   projectId: "junior-high-school-91081",
