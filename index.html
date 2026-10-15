@@ -293,6 +293,7 @@ import {
   getDocs,addDoc,updateDoc,deleteDoc,serverTimestamp,setDoc,runTransaction
 } from
 "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import {getFunctions,httpsCallable} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js";
 
 const firebaseApp=initializeApp(firebaseConfig);
 const auth=getAuth(firebaseApp);
@@ -300,6 +301,8 @@ const auth=getAuth(firebaseApp);
 const studentCreationApp=initializeApp(firebaseConfig,"student-creation");
 const studentCreationAuth=getAuth(studentCreationApp);
 const db=getFirestore(firebaseApp);
+const functions=getFunctions(firebaseApp,"asia-east1");
+const deleteStudentAccount=httpsCallable(functions,"deleteStudentAccount");
 const $=s=>document.querySelector(s);
 
 const schedule={
@@ -360,6 +363,7 @@ const attendanceNames={
 let me=null;
 let profile=null;
 let students=[];
+let allStudentProfiles=[];
 let selected="";
 let tab="home";
 let cache={};
@@ -1800,13 +1804,13 @@ function renderStudentManagement(){
       <label>初始密碼<input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="至少 6 碼"></label>
       <div class="actions full"><button type="submit">＋建立學生帳號</button></div>
     </form>
-    <h3>目前學生（${students.length} 位）</h3>
-    <div id="manageStudentList">${students.length?students.map(s=>`
+    <h3>目前學生（${allStudentProfiles.length} 位）</h3>
+    <div id="manageStudentList">${allStudentProfiles.length?allStudentProfiles.map(s=>`
       <div class="item">
         <div class="top"><div><strong>${esc(s.name||"未命名")}</strong><p class="muted">${esc(s.username||"（舊帳號）")}</p></div>
-        <button class="secondary" data-rename-student="${esc(s.uid)}">修改姓名</button></div>
+        <div class="actions" style="margin:0;align-items:center"><span class="pill" style="background:${s.active===false?'#fff0e8':'#e7f8ee'};color:${s.active===false?'#a45235':'#28764b'}">${s.active===false?'已停用':'使用中'}</span><button class="secondary" data-rename-student="${esc(s.uid)}">修改姓名</button><button class="secondary" data-toggle-student="${esc(s.uid)}">${s.active===false?'恢復帳號':'停用帳號'}</button><button class="danger" data-delete-student="${esc(s.uid)}">永久刪除</button></div></div>
       </div>`).join(""):'<div class="empty">目前沒有學生</div>'}</div>
-    <p class="muted">修改姓名不會改變登入帳號。重設密碼及刪除登入帳號仍需至 Firebase Authentication 操作。</p>
+    <p class="muted">停用後學生無法使用網站，資料保留，可隨時恢復。永久刪除會移除登入帳號及所有相關資料，無法復原；請先備份。</p>
   `;
   $("#createStudentForm").onsubmit=async e=>{
     e.preventDefault();
@@ -1842,6 +1846,38 @@ function renderStudentManagement(){
       try{await signOut(studentCreationAuth);}catch(_e){}
     }
   };
+  $("#manageStudentList").querySelectorAll("[data-toggle-student]").forEach(b=>{
+    b.onclick=async()=>{
+      const uid=b.dataset.toggleStudent;
+      const student=allStudentProfiles.find(s=>s.uid===uid);
+      if(!student)return;
+      const activate=student.active===false;
+      if(!confirm(`確定${activate?'恢復':'停用'}「${student.name||student.username||uid}」？${activate?'恢復後可重新使用網站。':'停用後無法使用網站，但資料會保留。'}`))return;
+      b.disabled=true;
+      try{
+        await updateDoc(doc(db,"users",uid),{active:activate});
+        await loadStudents();renderStudentManagement();
+        msg(activate?'已恢復學生帳號':'已停用學生帳號');
+      }catch(e){b.disabled=false;msg('操作失敗：'+e.message,true)}
+    };
+  });
+  $("#manageStudentList").querySelectorAll("[data-delete-student]").forEach(b=>{
+    b.onclick=async()=>{
+      const uid=b.dataset.deleteStudent;
+      const student=allStudentProfiles.find(s=>s.uid===uid);
+      if(!student)return;
+      const display=student.username||student.name||uid;
+      if(!confirm(`⚠️ 永久刪除「${student.name||display}」？\n會刪除登入帳號、作業、成績、寵物、抽獎獎品及日記等資料，無法復原。\n請先備份！`))return;
+      const answer=prompt(`最後確認：請輸入學生的英文帳號「${display}」才能永久刪除`);
+      if(answer!==display){if(answer!==null)msg('驗證文字不符，已取消刪除',true);return;}
+      b.disabled=true;
+      try{
+        const result=await deleteStudentAccount({uid});
+        await loadStudents();renderStudentManagement();
+        msg('已永久刪除：'+display);
+      }catch(e){b.disabled=false;msg('永久刪除未完成：'+e.message+'。請檢查後端函式部署與 Firebase 計費方案。',true)}
+    };
+  });
   $("#manageStudentList").querySelectorAll("[data-rename-student]").forEach(b=>{
     b.onclick=async()=>{
       const uid=b.dataset.renameStudent;
@@ -1867,13 +1903,10 @@ function renderStudentManagement(){
 async function loadStudents(){
   const snap=await getDocs(collection(db,"users"));
 
-  students=snap.docs.map(d=>({
-    uid:d.id,...d.data()
-  })).filter(x=>
-    x.role==="student"&&x.active===true
-  ).sort((a,b)=>
-    (a.name||"").localeCompare(b.name||"")
-  );
+  allStudentProfiles=snap.docs.map(d=>({uid:d.id,...d.data()}))
+    .filter(x=>x.role==="student")
+    .sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+  students=allStudentProfiles.filter(x=>x.active===true);
 
   selected=students.some(x=>x.uid===selected)
     ?selected
