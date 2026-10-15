@@ -524,7 +524,7 @@ function editHomework(existing=null){
       <label>
         科目
         <select name="subject">
-          ${["數學","理化","其他"].map(s=>`
+          ${["數學","理化","生物","其他"].map(s=>`
             <option ${existing?.subject===s?"selected":""}>
               ${s}
             </option>
@@ -708,7 +708,7 @@ function editStandard(kind,existing=null){
       control=`<textarea name="${key}">${esc(existing?.[key]||"")}</textarea>`;
     }else if(type==="select"){
       control=`<select name="${key}">
-        ${["數學","理化","其他"].map(s=>`
+        ${["數學","理化","生物","其他"].map(s=>`
           <option ${existing?.[key]===s?"selected":""}>${s}</option>
         `).join("")}
       </select>`;
