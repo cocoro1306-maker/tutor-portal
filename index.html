@@ -213,7 +213,7 @@ input[type=checkbox]{accent-color:#db8d8d}
 .grade-chart-scroll [data-grade-point]{cursor:pointer;outline-offset:2px}
 .grade-chart-scroll [data-grade-point]:focus{outline:2px solid #B9688B}
 .grade-point-detail{background:#F9E6EC;color:#784F61;border-radius:13px;padding:12px 14px;margin-top:12px;line-height:1.7;overflow-wrap:anywhere}
-.grade-section .item{background:white}
+.grade-legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin:8px 0 12px}.grade-legend-item{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#775C67}.grade-legend-item i{display:inline-block;width:12px;height:12px;border-radius:50%}.grade-section .item{background:white}
 @media(max-width:600px){.grade-section{padding:12px}.grade-section .formgrid{grid-template-columns:1fr}}
 
 </style>
@@ -1744,23 +1744,29 @@ function renderAttendance(){
 function renderGrades(){
   const arr=[...(cache.grades||[])]
     .filter(x=>x.score!==undefined && Number.isFinite(Number(x.score)))
-    .sort((a,b)=>(a.date||"").localeCompare(b.date||"") || (a.title||"").localeCompare(b.title||""));
-  const w=Math.max(340,arr.length*76+70), left=46,right=20,top=22,bottom=218;
-  const xAt=i=>left+(arr.length===1?(w-left-right)/2:i*(w-left-right)/Math.max(1,arr.length-1));
-  const yAt=v=>bottom-(Math.max(0,Math.min(100,Number(v)))/100)*(bottom-top);
-  const points=arr.map((a,i)=>({x:xAt(i),y:yAt(a.score)}));
-  const svg=arr.length?`<div class="grade-chart-scroll"><svg width="${w}" height="264" viewBox="0 0 ${w} 264" role="img" aria-label="成績折線圖：橫軸考試日期，縱軸分數，點選圓點可查看考卷名稱">
+    .sort((a,b)=>(a.date||"").localeCompare(b.date||"") || (a.subject||"").localeCompare(b.subject||"") || (a.title||"").localeCompare(b.title||""));
+  const subjects=[...new Set(arr.map(x=>String(x.subject||"未分類")))];
+  const palette=["#D989A6","#679DD2","#72AA86","#C69B59","#9B83C9","#D98565","#699D9D"];
+  const colorOf=subject=>palette[subjects.indexOf(subject)%palette.length];
+  const dates=[...new Set(arr.map(x=>x.date||"未填日期"))];
+  const w=Math.max(340,dates.length*86+78),left=46,right=22,top=24,bottom=218;
+  const xAt=date=>left+(dates.length===1?(w-left-right)/2:dates.indexOf(date)*(w-left-right)/(dates.length-1));
+  const yAt=value=>bottom-Math.max(0,Math.min(100,Number(value)))/100*(bottom-top);
+  const bySubject=subjects.map(subject=>({subject,items:arr.filter(x=>String(x.subject||"未分類")===subject)}));
+  const svg=arr.length?`<div class="grade-legend" aria-label="科目顏色說明">${subjects.map(sub=>`<span class="grade-legend-item"><i style="background:${colorOf(sub)}"></i>${esc(sub)}</span>`).join("")}</div>
+    <div class="grade-chart-scroll"><svg width="${w}" height="264" viewBox="0 0 ${w} 264" role="img" aria-label="各科獨立成績折線圖，橫軸考試日期，縱軸分數，點選圓點查看考卷名稱">
     ${[0,25,50,75,100].map(v=>`<line x1="${left}" y1="${yAt(v)}" x2="${w-right}" y2="${yAt(v)}" stroke="#E9DDE1" stroke-dasharray="4 5"/><text x="${left-9}" y="${yAt(v)+4}" text-anchor="end" fill="#917A85" font-size="12">${v}</text>`).join("")}
     <text x="12" y="12" fill="#917A85" font-size="12">分數</text>
     <line x1="${left}" y1="${bottom}" x2="${w-right}" y2="${bottom}" stroke="#C9AAB7"/>
-    ${points.length>1?`<polyline points="${points.map(p=>`${p.x},${p.y}`).join(" ")}" fill="none" stroke="#D989A6" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>`:""}
-    ${points.map((p,i)=>`<g><circle cx="${p.x}" cy="${p.y}" r="16" fill="transparent" role="button" tabindex="0" data-grade-point="${i}" aria-label="${esc(arr[i].date)} ${esc(arr[i].title)} ${esc(arr[i].score)}分"/><circle cx="${p.x}" cy="${p.y}" r="6.5" fill="#D989A6" stroke="white" stroke-width="2" pointer-events="none"/><text x="${p.x}" y="${Math.max(13,p.y-13)}" text-anchor="middle" font-size="12" font-weight="700" fill="#A6657F" pointer-events="none">${esc(arr[i].score)}</text><text x="${p.x}" y="${bottom+24}" text-anchor="middle" font-size="11" fill="#78646B" pointer-events="none">${esc((arr[i].date||"").slice(5))}</text></g>`).join("")}
+    ${dates.map(date=>`<text x="${xAt(date)}" y="${bottom+24}" text-anchor="middle" font-size="11" fill="#78646B">${esc(date==='未填日期'?date:date.slice(5))}</text>`).join("")}
+    ${bySubject.map(({subject,items})=>items.length>1?`<polyline points="${items.map(item=>`${xAt(item.date||'未填日期')},${yAt(item.score)}`).join(' ')}" fill="none" stroke="${colorOf(subject)}" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>`:"").join("")}
+    ${arr.map((item,i)=>{const x=xAt(item.date||'未填日期'),y=yAt(item.score),color=colorOf(String(item.subject||'未分類'));return `<g><circle cx="${x}" cy="${y}" r="18" fill="transparent" role="button" tabindex="0" data-grade-point="${i}" aria-label="${esc(item.subject||'未分類')} ${esc(item.date||'未填日期')} ${esc(item.title||'未命名考卷')} ${esc(item.score)}分"/><circle cx="${x}" cy="${y}" r="6.5" fill="${color}" stroke="white" stroke-width="2" pointer-events="none"/><text x="${x}" y="${Math.max(13,y-14)}" text-anchor="middle" font-size="12" font-weight="700" fill="${color}" pointer-events="none">${esc(item.score)}</text></g>`}).join("")}
     <text x="${w/2}" y="${bottom+44}" text-anchor="middle" fill="#917A85" font-size="12">考試日期（月/日）</text>
-  </svg></div><div id="gradePointDetail" class="grade-point-detail" aria-live="polite">👆 點擊圖上的分數點，可以查看考卷名稱與日期。</div>`:'<div class="empty">還沒有考試成績，登記第一筆後就會出現折線圖 ♡</div>';
+    </svg></div><div id="gradePointDetail" class="grade-point-detail" aria-live="polite">👆 點擊圖上的分數點，可以查看考卷名稱與日期。</div>`:'<div class="empty">還沒有考試成績，登記第一筆後就會出現折線圖 ♡</div>';
   $("#content").innerHTML=`
     <h2>📊 成績管理</h2>
     ${isAdmin()?`<section class="grade-section"><div class="top"><h3>✏️ 新成績輸入</h3><button id="toggleGradeForm" class="secondary" type="button">收合輸入區</button></div><div id="gradeEntry"></div></section>`:""}
-    <section class="grade-section"><h3>📈 成績趨勢</h3><p class="muted">橫軸為考試日期，縱軸為分數（滿分 100 分）。點擊分數點查看考卷名稱。</p>${svg}</section>
+    <section class="grade-section"><h3>📈 各科成績趨勢</h3><p class="muted">每個科目有自己的折線，不會與其他科目連接。橫軸為考試日期，縱軸為分數（滿分 100 分），點擊分數點查看考卷名稱。</p>${svg}</section>
     <section class="grade-section"><h3>📋 已登記成績（${arr.length} 筆）</h3><div id="records">${arr.length?[...arr].reverse().map(x=>record(x)).join(""):'<div class="empty">尚無登記的成績</div>'}</div></section>`;
   if(isAdmin()){
     editStandard("grades",null,{},"#gradeEntry");
@@ -1772,8 +1778,8 @@ function renderGrades(){
     $("#records").querySelectorAll("[data-delete]").forEach(b=>{b.onclick=()=>remove("grades",b.dataset.delete);});
   }
   const showPoint=i=>{
-    const a=arr[i];if(!a)return;
-    $("#gradePointDetail").innerHTML=`<strong>📝 ${esc(a.title||"未命名考卷")}</strong><div>${esc(a.date||"未填日期")} · ${esc(a.subject||"未分類")} · <strong>${esc(a.score)} / 100 分</strong></div>${a.detail?`<div>${esc(a.detail)}</div>`:""}`;
+    const item=arr[i];if(!item)return;
+    $("#gradePointDetail").innerHTML=`<strong>📝 ${esc(item.title||"未命名考卷")}</strong><div>${esc(item.date||"未填日期")} · ${esc(item.subject||"未分類")} · <strong>${esc(item.score)} / 100 分</strong></div>${item.detail?`<div>${esc(item.detail)}</div>`:""}`;
   };
   $("#content").querySelectorAll("[data-grade-point]").forEach(el=>{
     const activate=()=>showPoint(Number(el.dataset.gradePoint));
