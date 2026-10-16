@@ -1,4 +1,4 @@
-ㄇ
+
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -1349,8 +1349,14 @@ async function claimQuizXp(quizId){
  return await runTransaction(db,async tx=>{
   const submissionRef=doc(db,'quizSubmissions',quizId+'_'+me.uid);
   const petRef=doc(db,'pets',me.uid);
-  const [submission,petSnap]=await Promise.all([tx.get(submissionRef),tx.get(petRef)]);
+  const quizRef=doc(db,'quizzes',quizId);
+  const keyRef=doc(db,'quizKeys',quizId);
+  const [submission,petSnap,quizSnap,keySnap]=await Promise.all([tx.get(submissionRef),tx.get(petRef),tx.get(quizRef),tx.get(keyRef)]);
   if(!submission.exists() || submission.data().studentId!==me.uid || submission.data().quizId!==quizId)throw Error('找不到這份測驗的完成紀錄');
+  if(!quizSnap.exists() || !keySnap.exists())throw Error('找不到完整的測驗題目或答案');
+  const actualAnswers=submission.data().answers||[];
+  const expectedKeys=keySnap.data().keys||[];
+  if(actualAnswers.length!==quizSnap.data().questions.length || expectedKeys.length!==actualAnswers.length || !actualAnswers.every((a,i)=>a===expectedKeys[i].correct))throw Error('必須全部答對才能獲得 +3 XP');
   if(!petSnap.exists())throw Error('請先到寵物頁面建立並儲存寵物，再回來領取 XP');
   const pet={...defaultPet(),...petSnap.data()};
   if((pet.quizRewardIds||[]).includes(quizId))return {earned:false,xp:Number(pet.xp||0)};
@@ -1366,6 +1372,12 @@ async function showQuizMy(q){
   host.innerHTML=`<section class="quiz-play"><h3>🎉 測驗完成！</h3><p class="quiz-score">${correct} / ${q.questions.length} 題答對</p><p class="muted">本次 ${sub.score??'—'} 分｜最高 ${sub.bestScore??sub.score??'—'} 分｜第 ${sub.attemptCount||1} 次</p>${!quizExpired(q)&&!isPerfect(q,sub)?`<button id="quizAgain">🔄 再試一次直到全對</button>`:''}<div id="quiz-xp-status" class="quiz-feedback quiz-feedback-good">正在確認經驗值…</div>${q.questions.map((x,i)=>`<div class="quiz-review"><b>${i+1}. ${esc(x.text)}</b><p class="${sub.answers[i]===keys[i]?.correct?'quiz-good-text':'quiz-bad-text'}">${sub.answers[i]===keys[i]?.correct?'✓ 答對':'✕ 答錯'} · 你的答案 ${'ABCD'[sub.answers[i]]||'—'} · 正確答案 ${'ABCD'[keys[i]?.correct]||'—'}</p><p>${esc(keys[i]?.explanation||'老師尚未提供詳解')}</p></div>`).join('')}</section>`;
   host.querySelector('#quizAgain')?.addEventListener('click',()=>showQuizTake(q));
   const status=host.querySelector('#quiz-xp-status');
+  const allCorrect=sub.answers.length===q.questions.length && sub.answers.every((a,i)=>a===keys[i]?.correct);
+  if(!allCorrect){
+    status.className='quiz-feedback quiz-feedback-bad';
+    status.innerHTML='<strong>🌱 還差一點就全對！</strong><p>這次已儲存成績，但不會獲得 XP。全部答對後才會獲得 +3 XP，每份測驗最多領一次。</p>';
+    return;
+  }
   const showClaim=async()=>{
    status.textContent='正在領取經驗值…';
    try{const result=await claimQuizXp(q.id);status.className='quiz-feedback quiz-feedback-good';status.innerHTML=`<strong>${result.earned?'🎉 本次測驗獲得 +3 XP':'✓ 本次測驗已領取過 +3 XP'}</strong><p>目前累積 ${result.xp} XP</p>`;if(result.earned)xpCelebration(3,'完成理化預習測驗')}
@@ -1522,7 +1534,7 @@ function renderHome(){
   </div>
   <section class="home-block home-learning"><div class="top"><h3>📖 目前學習進度</h3>${quick('progress','查看進度 →')}</div>${currentLesson?`<div class="home-list-row"><div><b>${esc(currentLesson.title||currentLesson.subject||'本週課程')}</b><p class="muted">${esc(currentLesson.detail||'持續累積每天的進步！')}</p><p class="muted">${esc(currentLesson.date||'')}</p></div><span class="pill">${esc(currentLesson.subject||'學習中')}</span></div>`:'<p class="muted">老師更新課程後，就會在這裡顯示最新學習進度。</p>'}</section>
   <section class="home-block"><div class="top"><h3>📋 我的學習任務</h3>${quick('homework','查看作業 →')}</div>
-  ${pendingQuizzes.slice(0,4).map(q=>`<div class="home-list-row"><div><b>🧪 ${esc(q.title)}</b><p class="muted">${(q.questions||[]).length} 題互動測驗・完成後可領取 +3 XP</p></div><button data-home-quiz="${esc(q.id)}">開始 →</button></div>`).join('')}
+  ${pendingQuizzes.slice(0,4).map(q=>`<div class="home-list-row"><div><b>🧪 ${esc(q.title)}</b><p class="muted">${(q.questions||[]).length} 題互動測驗・全部答對可領取 +3 XP</p></div><button data-home-quiz="${esc(q.id)}">開始 →</button></div>`).join('')}
   ${pendingWorks.slice(0,5).map(w=>`<div class="home-list-row"><div><b>📝 ${esc(w.title||'作業')}</b><p class="muted">${esc(w.date||'')}・${esc(statusNames[getStatus(w)]||'待完成')}${(w.dueDate||addDays(w.date||today(),7))<today()?'・⏰ 已逾期':''}</p></div><span class="pill">待完成</span></div>`).join('')}
   ${!pendingQuizzes.length&&!pendingWorks.length?'<p class="muted">目前沒有待完成任務，做得很棒！✨</p>':''}</section>
   <section class="home-block"><div class="top"><h3>🎯 我的完成紀錄</h3>${quick('quizzes','查看測驗 →')}</div><div class="student-achievements"><span>🧪 已完成測驗 <b>${doneQuizzes.length}</b> 份</span><span>📝 已完成作業 <b>${doneWorks.length}</b> 份</span><span>🐷 寵物經驗 <b>${xp}</b> XP</span></div></section>
