@@ -1,4 +1,4 @@
-
+ㄇ
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -1328,11 +1328,19 @@ async function showQuizTake(q){
       const count=Number(previous?.attemptCount|| (previous?1:0))+1;
       const bestScore=Math.max(score,Number(previous?.bestScore??previous?.score??0));
       const payload={quizId:q.id,studentId:me.uid,answers,submittedAt:serverTimestamp(),score,graded:true,attemptCount:count,bestScore};
+      // 主成績先儲存；歷次紀錄失敗不能把已儲存的成績誤報成失敗
       await setDoc(doc(db,'quizSubmissions',q.id+'_'+me.uid),payload);
-      await addDoc(collection(db,'quizAttempts'),{...payload,attemptNumber:count});
-      await loadQuizzes();renderQuizzes();await showQuizMy(quizzes.find(x=>x.id===q.id));
-      msg('測驗成績已儲存，正在確認 +3 XP 獎勵');
-    }catch(e){btn.disabled=false;btn.textContent='重試儲存成績';msg('成績儲存失敗：'+e.message,true)}};
+      const attemptId=q.id+'_'+me.uid+'_'+count;
+      let historyWarning='';
+      try{await setDoc(doc(db,'quizAttempts',attemptId),{...payload,attemptNumber:count})}
+      catch(historyError){historyWarning='歷次作答紀錄尚未同步：'+historyError.message;console.warn(historyWarning)}
+      try{
+        await loadQuizzes();renderQuizzes();
+        const current=quizzes.find(x=>x.id===q.id);
+        if(current)await showQuizMy(current);
+      }catch(refreshError){console.warn('成績已儲存，但畫面更新失敗',refreshError)}
+      msg(historyWarning||'測驗成績已儲存！');
+    }catch(e){btn.disabled=false;btn.textContent='重試儲存成績';msg('成績儲存失敗：'+e.message+'。請確認已在 Firebase Console 發布最新版 Firestore Rules。',true)}};
   }
   draw();
  }catch(e){host.innerHTML='';msg('測驗無法開啟：'+e.message,true)}
