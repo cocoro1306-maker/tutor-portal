@@ -242,6 +242,13 @@ input[type=checkbox]{accent-color:#db8d8d}
 .quiz-review p{margin:6px 0;white-space:pre-wrap}
 .quiz-good-text{color:#468458}.quiz-bad-text{color:#bd6663}
 
+/* 首頁雙角色儀表板｜延續原本奶油粉色系 */
+.home-welcome{display:flex;position:relative;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:linear-gradient(120deg,#fff0db,#fff5ed 65%,#ffe6ed);border:2px solid #f2dfc7;border-radius:23px;padding:20px;margin-bottom:14px}
+.home-welcome h2{margin:9px 0 4px}.home-hero-emoji{font-size:54px;line-height:1.2}.home-petbar{width:100%;margin-top:7px}.home-petbar .top{font-size:14px}.home-petbar small{color:#987e78}.home-track{height:11px;background:#f4dfd6;border-radius:50px;overflow:hidden;margin:8px 0}.home-track>div{height:100%;background:linear-gradient(90deg,#e8a0ae,#d68b9b);border-radius:50px}
+.home-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}.home-stats>div{background:#fffaf4;border:1px solid #f0e0d2;border-radius:17px;padding:16px 8px;text-align:center}.home-stats b{display:block;font-size:clamp(23px,4vw,32px);color:#9d6679}.home-stats small{display:block;color:#8d7972;font-size:12px;margin-top:5px}
+.home-block{border:1px solid #f1e1d5;border-radius:20px;padding:16px;margin:14px 0;background:#fffdf9}.home-block h3{margin:4px 0 13px}.home-block .top{margin-bottom:8px}.home-block .top button{font-size:13px;min-height:34px;padding:7px 10px}.home-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #f2e9e0}.home-list-row:last-child{border:0}.home-list-row>div{min-width:0}.home-list-row p{margin:5px 0 0;font-size:13px;overflow-wrap:anywhere}.home-list-row button{white-space:nowrap}.home-score{color:#38916b;font-size:23px;white-space:nowrap}.home-quick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.home-quick button{text-align:left;min-height:53px;background:#fff1e7;color:#805e66;border:1px solid #f0d7d7}
+.quiz-import{background:#fff6f4;border:1px dashed #dca9b6;border-radius:16px;padding:14px;margin:15px 0}.quiz-import input[type=file]{width:100%;max-width:100%}.quiz-import .muted{font-size:13px}.quiz-question-edit{margin:13px 0}.quiz-question-edit label{display:block;margin:10px 0}.quiz-question-edit .top h4{margin:0}
+@media(max-width:600px){.home-welcome{padding:15px}.home-hero-emoji{font-size:42px}.home-block{padding:13px}.home-stats{gap:6px}.home-stats>div{padding:13px 4px}.home-stats small{font-size:11px}}
 </style>
 </head>
 <body>
@@ -978,11 +985,91 @@ function renderQuizzes(){
   document.querySelectorAll('[data-results]').forEach(b=>b.onclick=()=>showQuizResults(quizzes.find(q=>q.id===b.dataset.results)));
   document.querySelectorAll('[data-remove-quiz]').forEach(b=>b.onclick=async()=>{const q=quizzes.find(x=>x.id===b.dataset.removeQuiz);if(!confirm('刪除測驗？學生既有作答紀錄仍會保留。'))return;try{await deleteDoc(doc(db,'quizzes',q.id));await deleteDoc(doc(db,'quizKeys',q.id));await loadQuizzes();renderQuizzes();msg('測驗已刪除')}catch(e){msg('刪除失敗：'+e.message,true)}});
 }
+function parseQuizCSV(text){
+  text=String(text).replace(/^\uFEFF/,'');
+  const rows=[];let row=[],cell='',quoted=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++}else quoted=!quoted}
+    else if(c===','&&!quoted){row.push(cell);cell=''}
+    else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(x=>x.trim()))rows.push(row);row=[];cell=''}
+    else cell+=c;
+  }
+  if(quoted)throw Error('CSV 引號沒有正確結束');
+  row.push(cell);if(row.some(x=>x.trim()))rows.push(row);
+  if(rows.length<2)throw Error('題庫至少需要標題列與一題');
+  const headers=rows.shift().map(x=>x.trim().replace(/^\uFEFF/,''));
+  const required=['題目','A','B','C','D','答案','詳解'];
+  if(required.some(h=>!headers.includes(h)))throw Error('欄位必須包含：'+required.join('、'));
+  const col=h=>headers.indexOf(h);
+  return rows.map((r,i)=>{
+    const value=h=>String(r[col(h)]||'').trim();
+    const answer=value('答案').toUpperCase();
+    const options=['A','B','C','D'].map(value);
+    const points=headers.includes('配分')?Number(value('配分')||10):10;
+    if(!value('題目')||options.some(x=>!x)||!value('詳解')||!['A','B','C','D'].includes(answer))throw Error(`第 ${i+2} 列有空白欄位或答案不是 A～D`);
+    if(!Number.isFinite(points)||points<=0||points>100)throw Error(`第 ${i+2} 列配分需介於 1～100`);
+    if(value('題目').length>1000||options.some(x=>x.length>300)||value('詳解').length>1500)throw Error(`第 ${i+2} 列文字過長`);
+    return {chapter:headers.includes('章節')?value('章節'):'',text:value('題目'),options,correct:'ABCD'.indexOf(answer),explanation:value('詳解'),points};
+  });
+}
 function showQuizEditor(){
- const host=$('#quizEditor');host.innerHTML=`<section class="curriculum-box"><h3>新增課前測驗</h3><form id="quizCreateForm"><label>測驗名稱<input name="title" required maxlength="80" placeholder="例如：第四單元 聲音與波動"></label><label>科目<select name="subject"><option>理化</option><option>數學</option><option>生物</option></select></label><p>指定學生</p><div class="recipient-list">${students.map(s=>`<label style="display:inline-block;margin:5px 12px 5px 0"><input type="checkbox" name="recipient" value="${esc(s.uid)}" checked> ${esc(s.name)}</label>`).join('')}</div><p class="muted">每題填寫題目、四個選項、正確答案 A/B/C/D、解析；按「新增題目」可增加題數。</p><div id="quizQuestionEditor"></div><div class="actions"><button type="button" id="quizAddQuestion" class="secondary">＋新增題目</button><button type="submit">發布測驗</button><button type="button" id="quizCancel" class="secondary">取消</button></div></form></section>`;
- const add=()=>{const i=host.querySelectorAll('.quiz-question-edit').length;const section=document.createElement('section');section.className='curriculum-box quiz-question-edit';section.innerHTML=`<h4>第 ${i+1} 題</h4><label>題目<textarea name="question" required maxlength="1000"></textarea></label>${'ABCD'.split('').map(c=>`<label>選項 ${c}<input name="option${c}" required maxlength="300"></label>`).join('')}<label>正確答案<select name="correct">${'ABCD'.split('').map((c,j)=>`<option value="${j}">${c}</option>`).join('')}</select></label><label>解析<textarea name="explanation" maxlength="1500"></textarea></label>`;$('#quizQuestionEditor').append(section)};
- add();$('#quizAddQuestion').onclick=()=>{if(host.querySelectorAll('.quiz-question-edit').length<20)add();else msg('每份測驗最多 20 題',true)};$('#quizCancel').onclick=()=>host.innerHTML='';
- $('#quizCreateForm').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget;const targetIds=[...form.querySelectorAll('[name="recipient"]:checked')].map(x=>x.value);if(!targetIds.length){msg('至少指定一位學生',true);return}const questions=[...form.querySelectorAll('.quiz-question-edit')].map(node=>({text:node.querySelector('[name="question"]').value.trim(),options:'ABCD'.split('').map(c=>node.querySelector(`[name="option${c}"]`).value.trim()),points:10}));const keys=[...form.querySelectorAll('.quiz-question-edit')].map(node=>({correct:Number(node.querySelector('[name="correct"]').value),explanation:node.querySelector('[name="explanation"]').value.trim()}));if(questions.some(x=>!x.text||x.options.some(o=>!o))){msg('題目與選項不能空白',true);return}const button=form.querySelector('[type="submit"]');button.disabled=true;try{const ref=await addDoc(collection(db,'quizzes'),{title:form.title.value.trim(),subject:form.subject.value,targetIds,questions,released:false,createdAt:serverTimestamp(),teacherId:me.uid});await setDoc(doc(db,'quizKeys',ref.id),{keys,teacherId:me.uid});await loadQuizzes();renderQuizzes();msg('測驗發布成功')}catch(err){button.disabled=false;msg('建立失敗：'+err.message,true)}};
+ const host=$('#quizEditor');
+ host.innerHTML=`<section class="curriculum-box"><h3>🌷 建立課前測驗</h3><p class="muted">匯入 CSV → 預覽題目 → 選擇學生 → 發布測驗。每份最多 20 題；多於 20 題可依章節分批匯入。</p>
+ <form id="quizCreateForm"><label>測驗名稱<input name="title" required maxlength="80" placeholder="例如：3-1 波動｜課前預習"></label>
+ <label>科目<select name="subject"><option>理化</option><option>數學</option><option>生物</option></select></label>
+ <div class="quiz-import"><strong>📂 批次匯入 CSV 題庫</strong><p class="muted">支援 Excel 另存的 UTF-8 CSV，欄位：章節、題目、A、B、C、D、答案、詳解、配分</p><input type="file" id="quizCsvFile" accept=".csv,text/csv"><div id="quizCsvInfo" class="muted">尚未選擇檔案</div></div>
+ <h4>👩‍🏫 指定學生</h4><div class="recipient-list">${students.map(s=>`<label style="display:inline-block;margin:5px 12px 5px 0"><input type="checkbox" name="recipient" value="${esc(s.uid)}" checked> ${esc(s.name)}</label>`).join('')}</div>
+ <h4>📝 題目預覽與編輯</h4><div id="quizQuestionEditor"></div>
+ <div class="actions"><button type="button" id="quizAddQuestion" class="secondary">＋新增題目</button><button type="submit" id="quizPublish">發布測驗</button><button type="button" id="quizCancel" class="secondary">取消</button></div></form></section>`;
+ const add=(data={})=>{
+  const i=host.querySelectorAll('.quiz-question-edit').length;
+  if(i>=20)throw Error('每份測驗最多 20 題，請分章節匯入');
+  const section=document.createElement('section');section.className='curriculum-box quiz-question-edit';
+  section.innerHTML=`<div class="top"><h4>第 ${i+1} 題 ${data.chapter?`<span class="pill">${esc(data.chapter)}</span>`:''}</h4><button type="button" class="secondary quiz-delete-question">移除此題</button></div>
+  <label>題目<textarea name="question" required maxlength="1000">${esc(data.text||'')}</textarea></label>
+  ${'ABCD'.split('').map((c,j)=>`<label>選項 ${c}<input name="option${c}" required maxlength="300" value="${esc(data.options?.[j]||'')}"></label>`).join('')}
+  <label>正確答案<select name="correct">${'ABCD'.split('').map((c,j)=>`<option value="${j}" ${data.correct===j?'selected':''}>${c}</option>`).join('')}</select></label>
+  <label>詳解<textarea name="explanation" maxlength="1500" required>${esc(data.explanation||'')}</textarea></label>
+  <label>配分<input name="points" type="number" min="1" max="100" value="${data.points||10}" required></label>`;
+  $('#quizQuestionEditor').append(section);
+  section.querySelector('.quiz-delete-question').onclick=()=>{section.remove();renumber()};
+ };
+ const renumber=()=>host.querySelectorAll('.quiz-question-edit h4').forEach((h,i)=>{const badge=h.querySelector('.pill');h.textContent=`第 ${i+1} 題 `;if(badge)h.append(badge)});
+ add();
+ $('#quizAddQuestion').onclick=()=>{try{add()}catch(e){msg(e.message,true)}};
+ $('#quizCancel').onclick=()=>host.innerHTML='';
+ $('#quizCsvFile').onchange=async e=>{
+  const file=e.target.files?.[0];if(!file)return;
+  try{
+   if(file.size>1024*1024)throw Error('CSV 檔案請小於 1 MB');
+   const rows=parseQuizCSV(await file.text());
+   if(rows.length>20)throw Error(`這份 CSV 有 ${rows.length} 題；每份測驗上限 20 題。請使用分章節 CSV 檔，或拆成數份測驗。`);
+   const editor=$('#quizQuestionEditor');editor.innerHTML='';
+   rows.forEach(add);
+   const chapters=[...new Set(rows.map(x=>x.chapter).filter(Boolean))];
+   if(chapters.length===1&&!host.querySelector('[name="title"]').value)host.querySelector('[name="title"]').value=chapters[0]+'｜課前預習';
+   $('#quizCsvInfo').textContent=`✓ 已匯入 ${rows.length} 題${chapters.length?'｜'+chapters.join('、'):''}。請確認答案與詳解後發布。`;
+   msg('題庫匯入成功，請檢查題目並選擇學生');
+  }catch(err){$('#quizCsvInfo').textContent='匯入失敗：'+err.message;msg('CSV 匯入失敗：'+err.message,true)}
+ };
+ $('#quizCreateForm').onsubmit=async e=>{
+  e.preventDefault();const form=e.currentTarget;
+  const targetIds=[...form.querySelectorAll('[name="recipient"]:checked')].map(x=>x.value);
+  if(!targetIds.length){msg('至少指定一位學生',true);return}
+  const nodes=[...form.querySelectorAll('.quiz-question-edit')];
+  if(!nodes.length){msg('至少要有一題',true);return}
+  const questions=nodes.map(node=>({text:node.querySelector('[name="question"]').value.trim(),options:'ABCD'.split('').map(c=>node.querySelector(`[name="option${c}"]`).value.trim()),points:Number(node.querySelector('[name="points"]').value)}));
+  const keys=nodes.map(node=>({correct:Number(node.querySelector('[name="correct"]').value),explanation:node.querySelector('[name="explanation"]').value.trim()}));
+  if(questions.some(x=>!x.text||x.options.some(o=>!o)||!Number.isFinite(x.points)||x.points<=0)||keys.some(x=>!x.explanation)){msg('題目、選項、配分及詳解不能空白',true);return}
+  const button=form.querySelector('[type="submit"]');button.disabled=true;
+  try{
+   const ref=await addDoc(collection(db,'quizzes'),{title:form.title.value.trim(),subject:form.subject.value,targetIds,questions,released:false,createdAt:serverTimestamp(),teacherId:me.uid});
+   try{await setDoc(doc(db,'quizKeys',ref.id),{keys,teacherId:me.uid})}
+   catch(err){try{await deleteDoc(ref)}catch(_){}throw err}
+   await loadQuizzes();renderQuizzes();msg('測驗發布成功！學生現在可以作答');
+  }catch(err){button.disabled=false;msg('建立失敗：'+err.message,true)}
+ };
 }
 async function showQuizTake(q){
  const host=document.getElementById('quiz-detail-'+q.id);host.innerHTML='<p class="muted">正在準備題目…</p>';
@@ -1124,136 +1211,38 @@ function editAnnouncement(existing=null){
 /* ========= 今日首頁 ========= */
 
 function renderHome(){
-  const now=new Date();
-  const subject=todaySubject();
-  const date=today();
-  const weekday=dayName(now);
-
-  const works=(cache.homework||[]).filter(
-    x=>x.date===date
-  );
-
-  const tests=(cache.grades||[]).filter(
-    x=>x.date===date
-  );
-
-  const lessons=(cache.progress||[]).filter(
-    x=>x.date===date
-  );
-
-  const att=(cache.attendance||[]).filter(
-    x=>x.date===date&&x.subject===subject
-  );
-
-  const noticePreview=visibleAnnouncements().slice(0,3);
-  $("#content").innerHTML=`
-    <div class="today-card">
-      <p class="muted">📅 ${date} 星期${weekday}</p>
-      <h2>
-        ${subject
-          ?"今天上："+subject
-          :"今天沒有固定排課"}
-      </h2>
-
-      <p>
-        ${subject
-          ?"已自動設定今天的科目，新增紀錄時不用重新選擇。"
-          :"仍可自行新增其他日期或科目的紀錄。"}
-      </p>
-
-      ${isAdmin()?`
-        <div class="actions">
-          <button data-quick="homework">＋今日作業</button>
-          <button data-quick="grades">＋今日考試</button>
-          <button data-quick="progress">＋今日進度</button>
-          <button data-quick="attendance"
-            class="secondary">出席登記</button>
-        </div>
-      `:""}
-    </div>
-
-    <div class="notice-home"><div class="top"><h3>📢 最新公告</h3><button type="button" class="secondary" id="viewNotices">查看全部</button></div>
-      ${noticePreview.length?noticePreview.map(a=>`<div class="item"><div class="top"><strong>${a.pinned?"📌 ":""}${esc(a.title)}</strong>${!isAdmin()&&!a.readBy?.includes(me.uid)?'<span class="pill">未讀</span>':""}</div><p>${esc(a.body).slice(0,110)}${a.body.length>110?"…":""}</p></div>`).join(""):"<p class=\"muted\">目前沒有公告</p>"}</div>
-    <h3>每週固定課表</h3>
-    <div class="schedule">
-      <span>星期三｜理化</span>
-      <span>星期四｜數學</span>
-      <span>星期六｜生物</span>
-    </div>
-
-    <h3>今天的課程與作業</h3>
-
-    ${lessons.length
-      ?lessons.map(x=>`
-        <div class="item">
-          <span class="pill">課程進度</span>
-          <h3>${esc(x.title)}</h3>
-          ${curriculumDisplay(x)}
-          <p>${esc(x.detail||"")}</p>
-        </div>
-      `).join("")
-      :'<p class="muted">今天尚無課程進度紀錄。</p>'}
-
-    ${works.length
-      ?works.map(x=>`
-        <div class="item">
-          <span class="pill">作業</span>
-          <h3>${esc(x.title)}</h3>
-          ${curriculumDisplay(x)}
-          <p>${esc(x.detail||"")}</p>
-          <span class="status ${getStatus(x)}">
-            ${statusNames[getStatus(x)]}
-          </span>
-        </div>
-      `).join("")
-      :'<p class="muted">今天尚無作業。</p>'}
-
-    ${tests.length
-      ?tests.map(x=>`
-        <div class="item">
-          <span class="pill">考試</span>
-          <h3>${esc(x.title)}</h3>
-          <p>${esc(x.score)} / 100 分</p>
-        </div>
-      `).join("")
-      :'<p class="muted">今天尚無考試紀錄。</p>'}
-
-    ${subject?`
-      <h3>今日出席</h3>
-      ${att.length
-        ?att.map(x=>`
-          <p>
-            <span class="status ${esc(x.status)}">
-              ${attendanceNames[x.status]||"未登記"}
-            </span>
-            ${esc(x.note||"")}
-          </p>
-        `).join("")
-        :'<p class="muted">尚未登記出席狀態。</p>'}
-    `:""}
-  `;
-
-  $("#viewNotices")?.addEventListener("click",()=>{tab="announcements";render();});
-  $("#content").querySelectorAll("[data-quick]").forEach(b=>{
-    b.onclick=()=>{
-      const kind=b.dataset.quick;
-
-      if(kind==="attendance"){
-        tab="attendance";
-        renderAttendance();
-        return;
-      }
-
-      formRecipients=[];
-      const defaults={
-        date,
-        subject:subject||"數學"
-      };
-
-      if(kind==="homework")editHomework(null,defaults);
-      else editStandard(kind,null,defaults);
-    };
-  });
+ const date=today(),subject=todaySubject(),weekday=dayName(new Date());
+ const allWorks=cache.homework||[],allGrades=cache.grades||[],allLessons=cache.progress||[];
+ const recentGrades=[...allGrades].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+ const pendingWorks=allWorks.filter(x=>getStatus(x)!=='done');
+ const pendingQuizzes=quizzes.filter(q=>!quizResult(q,activeUid()));
+ const notices=visibleAnnouncements().slice(0,2);
+ const quick=(key,label)=>`<button class="secondary" data-home-tab="${key}">${label}</button>`;
+ const announcementBlock=`<section class="home-block"><div class="top"><h3>📢 老師公告</h3>${quick('announcements','查看全部 →')}</div>${notices.length?notices.map(a=>`<div class="home-list-row"><div><b>${a.pinned?'📌 ':''}${esc(a.title)}</b><p class="muted">${esc(a.body||'').slice(0,100)}</p></div>${!isAdmin()&&!(a.readBy||[]).includes(me.uid)?'<span class="pill">未讀</span>':''}</div>`).join(''):'<p class="muted">目前沒有公告 🌷</p>'}</section>`;
+ const lesson=allLessons.filter(x=>x.date===date);
+ if(isAdmin()){
+  const waiting=pendingWorks.length;
+  const notTaken=quizzes.reduce((n,q)=>n+(q.targetIds||[]).filter(id=>!quizResult(q,id)).length,0);
+  $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">👩‍🏫 老師工作台</span><h2>${subject?'今天是'+esc(subject)+'課':'今天沒有固定排課'} 🌷</h2><p class="muted">${esc(date)}・星期${weekday}｜整理學生的學習進度</p></div><span class="home-hero-emoji">📚</span></div>
+  <div class="home-stats"><div><b>${students.length}</b><small>學生人數</small></div><div><b>${waiting}</b><small>待處理作業</small></div><div><b>${notTaken}</b><small>待完成測驗人次</small></div></div>
+  <section class="home-block"><h3>✨ 快速管理</h3><div class="home-quick">${quick('homework','📝 作業管理')}${quick('quizzes','🧪 分派測驗')}${quick('attendance','📅 出席登記')}${quick('grades','📊 登記成績')}${quick('progress','📖 學習進度')}${quick('students','👩‍🎓 學生管理')}</div></section>
+  <section class="home-block"><div class="top"><h3>📋 今日課程</h3>${quick('progress','查看進度 →')}</div>${lesson.length?lesson.map(x=>`<div class="home-list-row"><div><b>${esc(x.title||x.subject||'課程')}</b><p class="muted">${esc(x.detail||'')}</p></div></div>`).join(''):'<p class="muted">今天還沒有新增課程進度</p>'}</section>${announcementBlock}
+  <section class="home-block"><h3>🗓️ 每週固定課表</h3><p class="muted">週三 理化　・　週四 數學　・　週六 生物</p></section>`;
+ }else{
+  const p={...defaultPet(),...(petData||{})},xp=Number(p.xp||0),n=stageCount(p),lower=milestone(n),upper=milestone(n+1),percent=Math.min(100,Math.max(0,100*(xp-lower)/(upper-lower)));
+  const recent=recentGrades[0];
+  $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">🌼 每天進步一點點</span><h2>今天也一起加油吧！</h2><p class="muted">${esc(date)}・星期${weekday}${subject?'｜今天是'+esc(subject)+'課':''}</p></div><span class="home-hero-emoji">${petAvatar(p)}</span><div class="home-petbar"><div class="top"><b>${esc(p.name||'我的寵物')}・Lv. ${petLevel(p)}</b><span>${xp} XP</span></div><div class="home-track"><div style="width:${percent}%"></div></div><small>距離下一次進化還需 ${Math.max(0,upper-xp)} XP</small></div></div>
+  <div class="home-stats"><div><b>${pendingWorks.length}</b><small>待完成作業</small></div><div><b>${pendingQuizzes.length}</b><small>待完成測驗</small></div><div><b>${recent?esc(recent.score):'—'}</b><small>最近考試</small></div></div>
+  <section class="home-block"><div class="top"><h3>📋 我的學習任務</h3>${quick('homework','查看作業 →')}</div>
+  ${pendingQuizzes.slice(0,4).map(q=>`<div class="home-list-row"><div><b>🧪 ${esc(q.title)}</b><p class="muted">${(q.questions||[]).length} 題互動測驗・完成後可領取 +3 XP</p></div><button data-home-quiz="${esc(q.id)}">開始 →</button></div>`).join('')}
+  ${pendingWorks.slice(0,5).map(w=>`<div class="home-list-row"><div><b>📝 ${esc(w.title||'作業')}</b><p class="muted">${esc(w.date||'')}・${esc(statusNames[getStatus(w)]||'待完成')}</p></div><span class="pill">待完成</span></div>`).join('')}
+  ${!pendingQuizzes.length&&!pendingWorks.length?'<p class="muted">目前沒有待完成任務，做得很棒！✨</p>':''}</section>
+  ${announcementBlock}
+  <section class="home-block"><div class="top"><h3>📈 最近學習成果</h3>${quick('grades','查看成績 →')}</div>${recent?`<div class="home-list-row"><div><b>${esc(recent.title||'最近考試')}</b><p class="muted">${esc(recent.date||'')}・${esc(recent.subject||'')}</p></div><strong class="home-score">${esc(recent.score)} / 100</strong></div>`:'<p class="muted">還沒有考試紀錄</p>'}</section>
+  <section class="home-block"><div class="top"><h3>💌 今日心情</h3>${quick('diary','寫下今天的心情 →')}</div><p class="muted">今天學會了什麼？來留下一點小紀錄吧！ 🌸</p></section>`;
+ }
+ $('#content').querySelectorAll('[data-home-tab]').forEach(btn=>btn.onclick=()=>{tab=btn.dataset.homeTab;render()});
+ $('#content').querySelectorAll('[data-home-quiz]').forEach(btn=>btn.onclick=()=>{tab='quizzes';render();const q=quizzes.find(x=>x.id===btn.dataset.homeQuiz);if(q)showQuizTake(q)});
 }
 
 /* ========= 每日作業 ========= */
