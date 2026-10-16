@@ -318,6 +318,7 @@ const schedule={
 const names={
   home:"今日課程",
   announcements:"公告欄",
+  quizzes:"課前小測驗",
   progress:"課程進度",
   homework:"作業管理",
   grades:"成績管理",
@@ -379,6 +380,8 @@ let petData=null;
 let diaryEntries=[];
 let formRecipients=[];
 let announcements=[];
+let quizzes=[];
+let quizSubmissions=[];
 
 function esc(value){
   return String(value??"").replace(/[&<>"']/g,c=>({
@@ -483,6 +486,7 @@ async function reload(){
 
     await loadExtras();
     await loadAnnouncements();
+    await loadQuizzes();
     render();
   }catch(error){
     msg("資料讀取失敗："+error.message,true);
@@ -780,7 +784,7 @@ function render(){
     ([key,label])=>`
       <button data-tab="${key}"
         class="${tab===key?"active":""}">
-        ${({home:"🏠",announcements:"📢",progress:"📖",homework:"📝",grades:"📊",materials:"📚",mistakes:"🔍",attendance:"📅",students:"👩‍🏫",pet:"🐣",diary:"💌"})[key]} ${label}
+        ${({home:"🏠",announcements:"📢",progress:"📖",homework:"📝",grades:"📊",materials:"📚",mistakes:"🔍",attendance:"📅",students:"👩‍🏫",pet:"🐣",diary:"💌",quizzes:"🧪"})[key]} ${label}
       </button>
     `
   ).join("");
@@ -794,6 +798,7 @@ function render(){
   });
 
   if(tab==="announcements"){renderAnnouncements();return;}
+  if(tab==="quizzes"){renderQuizzes();return;}
   if(tab==="pet"){renderPet();return;}
   if(tab==="diary"){renderDiary();return;}
   if(tab==="students"&&isAdmin()){
@@ -926,6 +931,42 @@ function renderDiary(){
     try{await updateDoc(doc(db,"diaries",btn.dataset.reply),{reply});await loadExtras();renderDiary();msg("已回覆學生");}catch(e){msg("回覆失敗："+e.message,true);}
   });
 }
+
+/* ========= 課前小測驗 ========= */
+const quizStudentName=id=>allStudentProfiles.find(x=>x.uid===id)?.name||id;
+async function loadQuizzes(){
+  if(!me)return;
+  const q=isAdmin()?collection(db,'quizzes'):query(collection(db,'quizzes'),where('targetIds','array-contains',me.uid));
+  const snap=await getDocs(q);
+  quizzes=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+  const submissions=await getDocs(isAdmin()?collection(db,'quizSubmissions'):query(collection(db,'quizSubmissions'),where('studentId','==',me.uid)));
+  quizSubmissions=submissions.docs.map(d=>({id:d.id,...d.data()}));
+}
+function quizResult(q,uid){return quizSubmissions.find(x=>x.quizId===q.id&&x.studentId===uid)}
+function quizQuestionMarkup(q){return (q.questions||[]).map((x,i)=>`<fieldset class="curriculum-box"><legend>第 ${i+1} 題（${esc(x.points||10)} 分）</legend><p>${esc(x.text)}</p>${(x.options||[]).map((o,j)=>`<label style="display:block;margin:8px 0"><input type="radio" name="answer${i}" value="${j}" required> ${'ABCD'[j]}. ${esc(o)}</label>`).join('')}</fieldset>`).join('')}
+function renderQuizzes(){
+  $('#content').innerHTML=`<div class="top"><h2>🧪 課前小測驗</h2>${isAdmin()?'<button id="createQuiz">＋建立測驗</button>':''}</div><p class="muted">${isAdmin()?'建立選擇題、指定學生、批改作答並決定何時公布詳解。':'每份測驗只能提交一次；老師公布答案後才能看到詳解。'}</p><div id="quizEditor"></div>${quizzes.length?quizzes.map(q=>{
+  const mine=!isAdmin()?quizResult(q,me.uid):null;
+  const count=quizSubmissions.filter(x=>x.quizId===q.id).length;
+  return `<article class="item"><div class="top"><h3>${esc(q.title)}</h3><span class="pill">${q.released?'已公布詳解':'尚未公布詳解'}</span></div><p class="muted">${esc(q.subject||'理化')} · ${(q.questions||[]).length} 題 · ${isAdmin()?`已繳交 ${count}/${(q.targetIds||[]).length} 人`:(mine?'✓ 已繳交':'尚未作答')}</p><div class="actions">${isAdmin()?`<button data-results="${q.id}" class="secondary">查看作答／批改</button><button data-release="${q.id}" class="secondary">${q.released?'收回詳解':'公布詳解'}</button><button data-remove-quiz="${q.id}" class="danger">刪除</button>`:mine?`<button data-myquiz="${q.id}" class="secondary">查看我的作答</button>`:`<button data-takequiz="${q.id}">開始作答</button>`}</div><div id="quiz-detail-${q.id}"></div></article>`;
+}).join(''):'<div class="empty">目前沒有測驗 🌷</div>'}`;
+  $('#createQuiz')?.addEventListener('click',showQuizEditor);
+  document.querySelectorAll('[data-takequiz]').forEach(b=>b.onclick=()=>showQuizTake(quizzes.find(q=>q.id===b.dataset.takequiz)));
+  document.querySelectorAll('[data-myquiz]').forEach(b=>b.onclick=()=>showQuizMy(quizzes.find(q=>q.id===b.dataset.myquiz)));
+  document.querySelectorAll('[data-results]').forEach(b=>b.onclick=()=>showQuizResults(quizzes.find(q=>q.id===b.dataset.results)));
+  document.querySelectorAll('[data-release]').forEach(b=>b.onclick=async()=>{const q=quizzes.find(x=>x.id===b.dataset.release);try{await updateDoc(doc(db,'quizzes',q.id),{released:!q.released});await loadQuizzes();renderQuizzes();msg(q.released?'已收回詳解':'已公布詳解')}catch(e){msg('操作失敗：'+e.message,true)}});
+  document.querySelectorAll('[data-remove-quiz]').forEach(b=>b.onclick=async()=>{const q=quizzes.find(x=>x.id===b.dataset.removeQuiz);if(!confirm('刪除測驗及其題目？學生既有作答紀錄仍會保留。'))return;try{await deleteDoc(doc(db,'quizzes',q.id));await deleteDoc(doc(db,'quizKeys',q.id));await loadQuizzes();renderQuizzes();msg('測驗已刪除')}catch(e){msg('刪除失敗：'+e.message,true)}});
+}
+function showQuizEditor(){
+ const host=$('#quizEditor');host.innerHTML=`<section class="curriculum-box"><h3>新增課前測驗</h3><form id="quizCreateForm"><label>測驗名稱<input name="title" required maxlength="80" placeholder="例如：第四單元 聲音與波動"></label><label>科目<select name="subject"><option>理化</option><option>數學</option><option>生物</option></select></label><p>指定學生</p><div class="recipient-list">${students.map(s=>`<label style="display:inline-block;margin:5px 12px 5px 0"><input type="checkbox" name="recipient" value="${esc(s.uid)}" checked> ${esc(s.name)}</label>`).join('')}</div><p class="muted">每題填寫題目、四個選項、正確答案 A/B/C/D、解析；按「新增題目」可增加題數。</p><div id="quizQuestionEditor"></div><div class="actions"><button type="button" id="quizAddQuestion" class="secondary">＋新增題目</button><button type="submit">發布測驗</button><button type="button" id="quizCancel" class="secondary">取消</button></div></form></section>`;
+ const add=()=>{const i=host.querySelectorAll('.quiz-question-edit').length;const section=document.createElement('section');section.className='curriculum-box quiz-question-edit';section.innerHTML=`<h4>第 ${i+1} 題</h4><label>題目<textarea name="question" required maxlength="1000"></textarea></label>${'ABCD'.split('').map(c=>`<label>選項 ${c}<input name="option${c}" required maxlength="300"></label>`).join('')}<label>正確答案<select name="correct">${'ABCD'.split('').map((c,j)=>`<option value="${j}">${c}</option>`).join('')}</select></label><label>解析<textarea name="explanation" maxlength="1500"></textarea></label>`;$('#quizQuestionEditor').append(section)};
+ add();$('#quizAddQuestion').onclick=()=>{if(host.querySelectorAll('.quiz-question-edit').length<20)add();else msg('每份測驗最多 20 題',true)};$('#quizCancel').onclick=()=>host.innerHTML='';
+ $('#quizCreateForm').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget;const targetIds=[...form.querySelectorAll('[name="recipient"]:checked')].map(x=>x.value);if(!targetIds.length){msg('至少指定一位學生',true);return}const questions=[...form.querySelectorAll('.quiz-question-edit')].map(node=>({text:node.querySelector('[name="question"]').value.trim(),options:'ABCD'.split('').map(c=>node.querySelector(`[name="option${c}"]`).value.trim()),points:10}));const keys=[...form.querySelectorAll('.quiz-question-edit')].map(node=>({correct:Number(node.querySelector('[name="correct"]').value),explanation:node.querySelector('[name="explanation"]').value.trim()}));if(questions.some(x=>!x.text||x.options.some(o=>!o))){msg('題目與選項不能空白',true);return}const button=form.querySelector('[type="submit"]');button.disabled=true;try{const ref=await addDoc(collection(db,'quizzes'),{title:form.title.value.trim(),subject:form.subject.value,targetIds,questions,released:false,createdAt:serverTimestamp(),teacherId:me.uid});await setDoc(doc(db,'quizKeys',ref.id),{keys,teacherId:me.uid});await loadQuizzes();renderQuizzes();msg('測驗發布成功')}catch(err){button.disabled=false;msg('建立失敗：'+err.message,true)}};
+}
+function showQuizTake(q){const host=document.getElementById('quiz-detail-'+q.id);host.innerHTML=`<form id="quizTakeForm"><h4>開始作答：${esc(q.title)}</h4>${quizQuestionMarkup(q)}<button type="submit">確認繳交（僅能一次）</button></form>`;host.querySelector('form').onsubmit=async e=>{e.preventDefault();if(!confirm('確定繳交？提交後無法修改答案。'))return;const answers=q.questions.map((_,i)=>Number(host.querySelector(`[name="answer${i}"]:checked`).value));const b=host.querySelector('[type="submit"]');b.disabled=true;try{await setDoc(doc(db,'quizSubmissions',q.id+'_'+me.uid),{quizId:q.id,studentId:me.uid,answers,submittedAt:serverTimestamp(),score:null,graded:false});await loadQuizzes();renderQuizzes();msg('作答已繳交！等待老師批改')}catch(err){b.disabled=false;msg('繳交失敗：'+err.message,true)}}}
+function showQuizMy(q){const sub=quizResult(q,me.uid),host=document.getElementById('quiz-detail-'+q.id);if(!sub)return;host.innerHTML=`<section class="curriculum-box"><h4>我的作答 ${sub.graded?'· 得分 '+sub.score+' / '+q.questions.length*10:'· 等待老師批改'}</h4>${q.questions.map((x,i)=>`<p><b>${i+1}. ${esc(x.text)}</b><br>我的答案：${'ABCD'[sub.answers[i]]||'未作答'}</p>`).join('')}${q.released?'<p class="muted">老師已公布詳解，請查看下方內容。</p>':''}<div id="quizMyKeys"></div></section>`;if(q.released)loadQuizKeys(q.id).then(keys=>{const el=document.getElementById('quizMyKeys');if(el)el.innerHTML=keys.map((x,i)=>`<p><b>第 ${i+1} 題：</b>正解 ${'ABCD'[x.correct]}　${esc(x.explanation||'無解析')}</p>`).join('')}).catch(e=>msg('詳解讀取失敗：'+e.message,true))}
+async function loadQuizKeys(id){const snap=await getDoc(doc(db,'quizKeys',id));return snap.data()?.keys||[]}
+async function showQuizResults(q){const host=document.getElementById('quiz-detail-'+q.id);host.innerHTML='<p>讀取批改資料中…</p>';try{const keys=await loadQuizKeys(q.id);const subs=quizSubmissions.filter(x=>x.quizId===q.id);host.innerHTML=`<section class="curriculum-box"><h4>作答與批改</h4>${(q.targetIds||[]).map(uid=>{const sub=subs.find(x=>x.studentId===uid);if(!sub)return `<p>${esc(quizStudentName(uid))}：尚未繳交</p>`;const score=sub.answers.reduce((sum,a,i)=>sum+(a===keys[i]?.correct?10:0),0);return `<div class="item"><b>${esc(quizStudentName(uid))}</b> · ${sub.graded?'已批改 '+sub.score+' 分':'待批改 · 預計 '+score+' 分'}<p class="muted">${sub.answers.map((a,i)=>`第${i+1}題 ${'ABCD'[a]} ${a===keys[i]?.correct?'✓':'✗'}`).join('　')}</p>${!sub.graded?`<button data-grade="${esc(sub.id)}" data-score="${score}">確認批改 ${score} 分</button>`:''}</div>`}).join('')}</section>`;host.querySelectorAll('[data-grade]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await updateDoc(doc(db,'quizSubmissions',b.dataset.grade),{score:Number(b.dataset.score),graded:true,gradedAt:serverTimestamp()});await loadQuizzes();renderQuizzes();showQuizResults(quizzes.find(x=>x.id===q.id));msg('批改完成')}catch(e){b.disabled=false;msg('批改失敗：'+e.message,true)}})}catch(e){host.innerHTML='';msg('讀取批改資料失敗：'+e.message,true)}}
 
 /* ========= 公告欄 ========= */
 function announcementActive(a){
