@@ -997,12 +997,12 @@ async function loadQuizzes(){
 }
 function quizResult(q,uid){return quizSubmissions.find(x=>x.quizId===q.id&&x.studentId===uid)}
 function renderQuizzes(){
-  $('#content').innerHTML=`<div class="top"><h2>🧪 課前小測驗</h2>${isAdmin()?'<button id="createQuiz">＋建立測驗</button>':''}</div><p class="muted">${isAdmin()?'可先建立所有題庫並保存；上課前再按「開放測驗」，學生才看得到。':'每次只顯示一題，選擇答案後立即顯示正解與解析，再按下一題。'}</p><div id="quizEditor"></div>${quizzes.length?quizzes.map(q=>{
+  $('#content').innerHTML=`<div class="top"><h2>🧪 課前小測驗</h2>${isAdmin()?'<button id="manageQuizBank">📚 題庫管理／發布</button>':''}</div><p class="muted">${isAdmin()?'可先建立所有題庫並保存；上課前再按「開放測驗」，學生才看得到。':'每次只顯示一題，選擇答案後立即顯示正解與解析，再按下一題。'}</p><div id="quizEditor"></div>${quizzes.length?quizzes.map(q=>{
   const mine=!isAdmin()?quizResult(q,me.uid):null;
   const count=quizSubmissions.filter(x=>x.quizId===q.id).length;
   return `<article class="item"><div class="top"><h3>${esc(q.title)}</h3><span class="pill">${(q.questions||[]).length} 題 · ${q.released===true?"🟢 開放中":"🔒 題庫待開放"}</span></div><p class="muted">${esc(q.subject||'理化')} · ${isAdmin()?`已完成 ${count}/${(q.targetIds||[]).length} 人`:(mine?'✓ 已完成':'尚未作答')}</p><div class="actions">${isAdmin()?`<button data-results="${q.id}" class="secondary">查看成績</button><button data-toggle-quiz="${q.id}" class="secondary">${q.released===true?"🔒 關閉測驗":"🟢 開放測驗"}</button><button data-remove-quiz="${q.id}" class="danger">刪除</button>`:mine?`<button data-myquiz="${q.id}" class="secondary">查看我的結果</button>`:`<button data-takequiz="${q.id}">開始作答</button>`}</div><div id="quiz-detail-${q.id}"></div></article>`;
 }).join(''):'<div class="empty">目前沒有測驗 🌷</div>'}`;
-  $('#createQuiz')?.addEventListener('click',showQuizEditor);
+  $('#manageQuizBank')?.addEventListener('click',showQuizBank);
   document.querySelectorAll('[data-takequiz]').forEach(b=>b.onclick=()=>showQuizTake(quizzes.find(q=>q.id===b.dataset.takequiz)));
   document.querySelectorAll('[data-myquiz]').forEach(b=>b.onclick=()=>showQuizMy(quizzes.find(q=>q.id===b.dataset.myquiz)));
   document.querySelectorAll('[data-results]').forEach(b=>b.onclick=()=>showQuizResults(quizzes.find(q=>q.id===b.dataset.results)));
@@ -1016,6 +1016,62 @@ function renderQuizzes(){
   });
   document.querySelectorAll('[data-remove-quiz]').forEach(b=>b.onclick=async()=>{const q=quizzes.find(x=>x.id===b.dataset.removeQuiz);if(!confirm('刪除測驗？學生既有作答紀錄仍會保留。'))return;try{await deleteDoc(doc(db,'quizzes',q.id));await deleteDoc(doc(db,'quizKeys',q.id));await loadQuizzes();renderQuizzes();msg('測驗已刪除')}catch(e){msg('刪除失敗：'+e.message,true)}});
 }
+
+/* 獨立題庫：儲存題目不指定學生，發布時才建立測驗 */
+async function showQuizBank(){
+ const host=$('#quizEditor');host.innerHTML='<p class="muted">正在讀取題庫…</p>';
+ try{
+  const snap=await getDocs(collection(db,'quizBanks'));
+  const banks=snap.docs.map(d=>({id:d.id,...d.data()}));
+  host.innerHTML=`<section class="curriculum-box"><h3>📚 題庫管理</h3><p class="muted">先儲存所有題庫，不必選學生。要測驗時才選章節、題數與學生。</p><label>一次匯入多份 CSV（可多選）<input id="bankCsv" type="file" accept=".csv,text/csv" multiple></label><div id="bankUploadStatus" class="muted"></div><h4>已儲存的題庫（${banks.length}）</h4><div id="bankRows">${banks.length?banks.map(b=>`<article class="item"><div class="top"><b>${esc(b.title||'未命名題庫')}</b><span class="pill">${(b.items||[]).length} 題</span></div><p class="muted">${esc(b.subject||'理化')} · ${esc(b.chapter||'未分類')}</p><div class="actions"><button type="button" data-bank-publish="${b.id}">選學生並開放</button><button type="button" class="secondary" data-bank-preview="${b.id}">查看題目</button><button type="button" class="danger" data-bank-delete="${b.id}">刪除題庫</button></div><div id="bank-action-${b.id}"></div></article>`).join(''):'<p class="muted">目前沒有題庫，先匯入 CSV。</p>'}</div></section>`;
+  $('#bankCsv').onchange=async e=>{
+   const files=[...e.target.files];if(!files.length)return;
+   const status=$('#bankUploadStatus');status.textContent='正在匯入…';let success=0;
+   try{
+    for(const file of files){
+     if(file.size>1024*1024)throw Error(file.name+' 超過 1 MB');
+     const items=parseQuizCSV(await file.text());
+     const chapters=[...new Set(items.map(x=>x.chapter).filter(Boolean))];
+     for(const chapter of (chapters.length?chapters:['未分類'])){
+      const group=items.filter(x=>!chapters.length||x.chapter===chapter);
+      await addDoc(collection(db,'quizBanks'),{title:chapters.length?chapter:file.name.replace(/\.csv$/i,''),chapter,subject:'理化',items:group,teacherId:me.uid,createdAt:serverTimestamp()});success++;
+     }
+    }
+    msg(`已成功儲存 ${success} 個章節題庫`);await showQuizBank();
+   }catch(err){status.textContent=`已儲存 ${success} 個題庫；錯誤：${err.message}`;msg(err.message,true)}
+  };
+  host.querySelectorAll('[data-bank-preview]').forEach(b=>b.onclick=()=>{
+   const bank=banks.find(x=>x.id===b.dataset.bankPreview);const target=$('#bank-action-'+bank.id);
+   target.innerHTML=target.innerHTML?'':`<div class="curriculum-box">${bank.items.map((x,i)=>`<p><b>${i+1}. ${esc(x.text)}</b><br><small>答案：${'ABCD'[x.correct]}｜${esc(x.explanation)}</small></p>`).join('')}</div>`;
+  });
+  host.querySelectorAll('[data-bank-delete]').forEach(b=>b.onclick=async()=>{
+   const bank=banks.find(x=>x.id===b.dataset.bankDelete);
+   if(!confirm(`刪除題庫「${bank.title}」？已發布的測驗不受影響。`))return;
+   try{await deleteDoc(doc(db,'quizBanks',bank.id));msg('題庫已刪除');await showQuizBank()}catch(err){msg(err.message,true)}
+  });
+  host.querySelectorAll('[data-bank-publish]').forEach(b=>b.onclick=()=>{
+   const bank=banks.find(x=>x.id===b.dataset.bankPublish);const target=$('#bank-action-'+bank.id);
+   target.innerHTML=`<div class="curriculum-box"><h4>發布「${esc(bank.title)}」</h4><label>測驗名稱<input class="bank-title" value="${esc(bank.title)}｜課前預習" maxlength="80"></label><label>出題數（最多 20 題）<input class="bank-count" type="number" min="1" max="${Math.min(20,bank.items.length)}" value="${Math.min(20,bank.items.length)}"></label><p class="muted">指定學生（這一步才選擇）</p><div>${students.map(st=>`<label style="display:inline-block;margin:5px 12px 5px 0"><input type="checkbox" class="bank-student" value="${esc(st.uid)}">${esc(st.name)}</label>`).join('')}</div><button type="button" class="bank-confirm">🟢 開放給指定學生</button></div>`;
+   target.querySelector('.bank-confirm').onclick=async()=>{
+    const ids=[...target.querySelectorAll('.bank-student:checked')].map(x=>x.value);
+    const title=target.querySelector('.bank-title').value.trim();const count=Number(target.querySelector('.bank-count').value);
+    if(!ids.length||!title||!Number.isInteger(count)||count<1||count>20||count>bank.items.length){msg('請填測驗名稱、正確題數，並至少選一位學生',true);return}
+    if(!confirm(`確定發布「${title}」給 ${ids.length} 位學生？`))return;
+    const btn=target.querySelector('.bank-confirm');btn.disabled=true;
+    const items=bank.items.slice(0,count);
+    const questions=items.map(x=>({text:x.text,options:x.options,points:x.points}));
+    const keys=items.map(x=>({correct:x.correct,explanation:x.explanation}));
+    try{
+     const ref=await addDoc(collection(db,'quizzes'),{title,subject:bank.subject||'理化',targetIds:ids,questions,released:false,teacherId:me.uid,createdAt:serverTimestamp(),bankId:bank.id});
+     try{await setDoc(doc(db,'quizKeys',ref.id),{keys,teacherId:me.uid});await updateDoc(ref,{released:true})}
+     catch(err){try{await deleteDoc(ref)}catch(_){}throw err}
+     await loadQuizzes();renderQuizzes();msg(`已開放「${title}」給 ${ids.length} 位學生`);
+    }catch(err){btn.disabled=false;msg('發布失敗：'+err.message,true)}
+   };
+  });
+ }catch(err){host.innerHTML=`<p class="muted">題庫讀取失敗：${esc(err.message)}</p>`;msg('題庫讀取失敗：'+err.message,true)}
+}
+
 function parseQuizCSV(text){
   text=String(text).replace(/^\uFEFF/,'');
   const rows=[];let row=[],cell='',quoted=false;
