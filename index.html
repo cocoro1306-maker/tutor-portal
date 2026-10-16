@@ -376,7 +376,6 @@ const names={
   progress:"課程進度",
   homework:"作業管理",
   grades:"成績管理",
-  leaderboard:"寵物排行榜",
   analytics:"學生學習總覽",
   backup:"資料匯出",
   attendance:"出席紀錄",
@@ -856,16 +855,7 @@ function bankEditor(bank,done){
   catch(err){e.target.disabled=false;msg('題庫儲存失敗：'+err.message,true)}
  };
 }
-async function syncMyLeaderboard(){
- if(!me||isAdmin())return;
- try{const snap=await getDoc(doc(db,'pets',me.uid));if(!snap.exists())return;const p=snap.data();await setDoc(doc(db,'petLeaderboard',me.uid),{petName:String(p.name||'小豆').slice(0,12),emoji:petAvatar(p),xp:Number(p.xp||0),level:petLevel(p),updatedAt:serverTimestamp()})}
- catch(e){console.warn('排行榜同步失敗',e)}
-}
-async function renderLeaderboard(){
- const host=$('#content');host.innerHTML='<h2>🏆 寵物排行榜</h2><p class="muted">只顯示寵物名稱、圖案、等級與 XP，不顯示學生真名。</p><p>載入中…</p>';
- try{await syncMyLeaderboard();const snap=await getDocs(collection(db,'petLeaderboard'));const rows=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>Number(b.xp||0)-Number(a.xp||0));host.innerHTML=`<h2>🏆 寵物排行榜</h2><p class="muted">只顯示寵物名稱、圖案、等級與 XP。學生登入後會同步自己的寵物資訊。</p>${rows.length?rows.map((p,i)=>`<div class="item"><b>${['🥇','🥈','🥉'][i]||'#'+(i+1)} ${esc(p.emoji)} ${esc(p.petName)}</b><span class="pill">Lv.${Number(p.level)||1} ・ ${Number(p.xp)||0} XP</span></div>`).join(''):'<p class="empty">目前還沒有寵物上榜</p>'}`}
- catch(e){host.innerHTML='<p class="error">排行榜讀取失敗：'+esc(e.message)+'</p>'}
-}
+
 function renderAnalytics(){
  const host=$('#content'),grades=cache.grades||[],homeworks=cache.homework||[],attendance=cache.attendance||[],progress=cache.progress||[];
  const completed=homeworks.filter(x=>getStatus(x)==='done').length,rate=homeworks.length?Math.round(completed/homeworks.length*100):0;
@@ -879,7 +869,7 @@ function csvEscape(x){const s=String(x??'');return '"'+s.replace(/"/g,'""')+'"'}
 async function renderBackup(){
  if(!isAdmin()){$('#content').innerHTML='<p>僅老師可匯出資料</p>';return}
  const host=$('#content');host.innerHTML=`<h2>💾 匯出資料</h2><p class="muted">只下載老師有權限讀取的資料。請妥善保管，檔案可能包含學生個人資料。</p><button id="exportJson">匯出完整 JSON</button><button id="exportCsv" class="secondary">匯出各類 CSV（ZIP 需自行壓縮）</button>`;
- async function collect(){const kinds=['users','progress','homework','grades','attendance','diaries','announcements','quizzes','quizSubmissions','quizAttempts','quizBanks','petEvents','pets','petLeaderboard','settings'];const all={exportedAt:new Date().toISOString()};for(const kind of kinds){try{const snap=await getDocs(collection(db,kind));all[kind]=snap.docs.map(d=>({id:d.id,...d.data()}))}catch(e){all[kind]={error:e.message}}}return all}
+ async function collect(){const kinds=['users','progress','homework','grades','attendance','diaries','announcements','quizzes','quizSubmissions','quizAttempts','quizBanks','petEvents','pets','settings'];const all={exportedAt:new Date().toISOString()};for(const kind of kinds){try{const snap=await getDocs(collection(db,kind));all[kind]=snap.docs.map(d=>({id:d.id,...d.data()}))}catch(e){all[kind]={error:e.message}}}return all}
  host.querySelector('#exportJson').onclick=async e=>{e.target.disabled=true;try{const data=await collect();downloadData('學習角落_備份_'+today()+'.json',JSON.stringify(data,null,2),'application/json;charset=utf-8');msg('JSON 匯出完成')}catch(err){msg(err.message,true)}finally{e.target.disabled=false}};
  host.querySelector('#exportCsv').onclick=async e=>{e.target.disabled=true;try{const data=await collect();for(const [kind,items] of Object.entries(data)){if(!Array.isArray(items)||!items.length)continue;const keys=[...new Set(items.flatMap(x=>Object.keys(x)))];const csv='\uFEFF'+[keys.join(','),...items.map(x=>keys.map(k=>csvEscape(typeof x[k]==='object'?JSON.stringify(x[k]):x[k])).join(','))].join('\r\n');downloadData(kind+'_'+today()+'.csv',csv,'text/csv;charset=utf-8')}msg('CSV 已匯出，請查看下載資料夾')}catch(err){msg(err.message,true)}finally{e.target.disabled=false}};
 }
@@ -907,7 +897,7 @@ function render(){
     ([key,label])=>`
       <button data-tab="${key}"
         class="${tab===key?"active":""}">
-        ${({home:"🏠",announcements:"📢",progress:"📖",homework:"📝",grades:"📊",leaderboard:"🏆",analytics:"📈",backup:"💾",attendance:"📅",students:"👩‍🏫",pet:"🐣",diary:"💌",quizzes:"🧪"})[key]} ${label}
+        ${({home:"🏠",announcements:"📢",progress:"📖",homework:"📝",grades:"📊",analytics:"📈",backup:"💾",attendance:"📅",students:"👩‍🏫",pet:"🐣",diary:"💌",quizzes:"🧪"})[key]} ${label}
       </button>
     `
   ).join("");
@@ -923,7 +913,6 @@ function render(){
   if(tab==="announcements"){renderAnnouncements();return;}
   if(tab==="quizzes"){renderQuizzes();return;}
   if(tab==="pet"){renderPet();return;}
-  if(tab==="leaderboard"){renderLeaderboard();return;}
   if(tab==="analytics"){renderAnalytics();return;}
   if(tab==="backup"){renderBackup();return;}
   if(tab==="diary"){renderDiary();return;}
@@ -1045,8 +1034,8 @@ function renderPet(){
   <section class="reward-card"><h3>🎒 我的獎品背包</h3>${PRIZES.map((name,i)=>`<div class="bag-row"><span>${name}</span><b>可用 ${Math.max(0,(bag[PRIZE_KEYS[i]]||0)-(redeemed[PRIZE_KEYS[i]]||0))} 張</b>${isAdmin()?`<button class="secondary" data-redeem="${i}" ${bag[PRIZE_KEYS[i]]<=redeemed[PRIZE_KEYS[i]]?'disabled':''}>核銷 1 張</button>`:''}</div>`).join('')}<p class="muted">獎品可累積，兌換或使用作業減免券時由老師核銷。免費版抽獎在學生裝置進行，不能保證防竄改。</p></section>
   ${isAdmin()?`<section class="reward-card"><h3>🎲 抽獎機率設定</h3><p class="muted">免費前端抽獎，機率可調整，但無法保證防竄改。</p><div class="formgrid"><label>飲料券 %<input id="lotteryDrink" type="number" min="0" max="100" value="60"></label><label>現金券 %<input id="lotteryCash" type="number" min="0" max="100" value="10"></label><label>作業減免券 %<input id="lotteryHomework" type="number" min="0" max="100" value="30"></label></div><button id="saveLottery">儲存機率</button></section><section class="reward-card"><h3>🧑‍🏫 老師 XP 結算／獎懲</h3><p class="muted">每週檢查作業後，可視情況加分、扣分或免扣分；每次調整都有紀錄。請先在「作業管理」標記完成，學生才會拿到食物。</p><div class="formgrid"><label>XP 調整（可填負數）<input id="xpDelta" type="number" min="-100" max="100" value="5"></label><label>調整原因<input id="xpReason" maxlength="120" placeholder="例如：本週表現優秀" required></label></div><div class="actions"><button id="adjustXp">儲存 XP 調整</button><button class="secondary" id="waivePenalty">本週免扣 XP（留下紀錄）</button></div></section>`:''}`;
   if(isAdmin()){loadLotteryWeights().then(w=>{['lotteryDrink','lotteryCash','lotteryHomework'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.value=Math.round(w[i]*100)})});$('#saveLottery')?.addEventListener('click',async()=>{const a=['lotteryDrink','lotteryCash','lotteryHomework'].map(id=>Number(document.getElementById(id).value));if(a.some(x=>!Number.isFinite(x)||x<0)||a.reduce((n,x)=>n+x,0)!==100){msg('三個機率必須合計 100%',true);return}try{await setDoc(doc(db,'settings','lottery'),{weights:a.map(x=>x/100),updatedAt:serverTimestamp(),teacherId:me.uid});msg('抽獎機率已更新')}catch(e){msg('儲存失敗：'+e.message,true)}})}
-  $('#editPet')?.addEventListener('click',()=>{const dialog=document.createElement('div');dialog.className='pet-modal';dialog.innerHTML=`<div class="pet-dialog"><h3>🐾 自訂我的小夥伴</h3><div class="pet-choice-grid">${PET_CHOICES.map(e=>`<button class="pet-choice ${e===petAvatar(p)?'chosen':''}" data-emoji="${e}">${e}</button>`).join('')}</div><label>寵物名字<input id="petNewName" maxlength="12" value="${esc(p.name)}"></label><div class="actions"><button id="savePet">儲存寵物</button><button class="secondary" id="cancelPet">取消</button></div></div>`;document.body.append(dialog);let chosen=petAvatar(p);dialog.querySelectorAll('[data-emoji]').forEach(btn=>btn.onclick=()=>{chosen=btn.dataset.emoji;dialog.querySelectorAll('[data-emoji]').forEach(x=>x.classList.toggle('chosen',x===btn))});dialog.querySelector('#cancelPet').onclick=()=>dialog.remove();dialog.querySelector('#savePet').onclick=async()=>{const name=dialog.querySelector('#petNewName').value.trim();if(!name||name.length>12){msg('名字需為 1～12 字',true);return}try{const ref=doc(db,'pets',activeUid()),snap=await getDoc(ref);if(snap.exists())await updateDoc(ref,{name,emoji:chosen});else await setDoc(ref,{...defaultPet(),name,emoji:chosen});dialog.remove();await loadExtras();await syncMyLeaderboard();renderPet();msg('寵物外觀與名字已儲存！')}catch(e){msg('儲存失敗：'+e.message,true)}}});
-  $('#content').querySelectorAll('[data-feed]').forEach(btn=>btn.onclick=async()=>{btn.disabled=true;const id=btn.dataset.feed,food=btn.dataset.food;let evolved=false;try{await runTransaction(db,async tx=>{const pr=doc(db,'pets',activeUid()),hr=doc(db,'homework',id),hw=await tx.get(hr),ps=await tx.get(pr);if(!hw.exists()||hw.data().studentId!==activeUid()||hw.data().status!=='done')throw Error('老師尚未確認這份作業');if(!ps.exists())throw Error('請先選擇 Emoji 寵物並儲存，再餵食喔！');const old={...defaultPet(),...ps.data()};if((old.fedIds||[]).includes(id))throw Error('已領取這份作業的食物');const next=old.xp+10,ev=evolutionFrom(next,old.evolutions);evolved=ev>old.evolutions;const data={xp:next,evolutions:ev,fedIds:[...old.fedIds,id]};if(ps.exists())tx.update(pr,data);else tx.set(pr,{...old,...data})});await loadExtras();await syncMyLeaderboard();renderPet();feedCelebration(food,evolved);xpCelebration(10,'作業完成獎勵');msg(evolved?'🎊 餵食成功！寵物進化，解鎖禮物抽獎！':'餵食成功！獲得 10 XP 💖')}catch(e){btn.disabled=false;msg('餵食失敗：'+e.message,true)}});
+  $('#editPet')?.addEventListener('click',()=>{const dialog=document.createElement('div');dialog.className='pet-modal';dialog.innerHTML=`<div class="pet-dialog"><h3>🐾 自訂我的小夥伴</h3><div class="pet-choice-grid">${PET_CHOICES.map(e=>`<button class="pet-choice ${e===petAvatar(p)?'chosen':''}" data-emoji="${e}">${e}</button>`).join('')}</div><label>寵物名字<input id="petNewName" maxlength="12" value="${esc(p.name)}"></label><div class="actions"><button id="savePet">儲存寵物</button><button class="secondary" id="cancelPet">取消</button></div></div>`;document.body.append(dialog);let chosen=petAvatar(p);dialog.querySelectorAll('[data-emoji]').forEach(btn=>btn.onclick=()=>{chosen=btn.dataset.emoji;dialog.querySelectorAll('[data-emoji]').forEach(x=>x.classList.toggle('chosen',x===btn))});dialog.querySelector('#cancelPet').onclick=()=>dialog.remove();dialog.querySelector('#savePet').onclick=async()=>{const name=dialog.querySelector('#petNewName').value.trim();if(!name||name.length>12){msg('名字需為 1～12 字',true);return}try{const ref=doc(db,'pets',activeUid()),snap=await getDoc(ref);if(snap.exists())await updateDoc(ref,{name,emoji:chosen});else await setDoc(ref,{...defaultPet(),name,emoji:chosen});dialog.remove();await loadExtras();renderPet();msg('寵物外觀與名字已儲存！')}catch(e){msg('儲存失敗：'+e.message,true)}}});
+  $('#content').querySelectorAll('[data-feed]').forEach(btn=>btn.onclick=async()=>{btn.disabled=true;const id=btn.dataset.feed,food=btn.dataset.food;let evolved=false;try{await runTransaction(db,async tx=>{const pr=doc(db,'pets',activeUid()),hr=doc(db,'homework',id),hw=await tx.get(hr),ps=await tx.get(pr);if(!hw.exists()||hw.data().studentId!==activeUid()||hw.data().status!=='done')throw Error('老師尚未確認這份作業');if(!ps.exists())throw Error('請先選擇 Emoji 寵物並儲存，再餵食喔！');const old={...defaultPet(),...ps.data()};if((old.fedIds||[]).includes(id))throw Error('已領取這份作業的食物');const next=old.xp+10,ev=evolutionFrom(next,old.evolutions);evolved=ev>old.evolutions;const data={xp:next,evolutions:ev,fedIds:[...old.fedIds,id]};if(ps.exists())tx.update(pr,data);else tx.set(pr,{...old,...data})});await loadExtras();renderPet();feedCelebration(food,evolved);xpCelebration(10,'作業完成獎勵');msg(evolved?'🎊 餵食成功！寵物進化，解鎖禮物抽獎！':'餵食成功！獲得 10 XP 💖')}catch(e){btn.disabled=false;msg('餵食失敗：'+e.message,true)}});
   $('#content').querySelectorAll('[data-box]').forEach(btn=>btn.onclick=async()=>{
     const box=Number(btn.dataset.box);
     if(!confirm('要打開神祕禮物 '+ 'ABC'[box] +' 嗎？每次進化只能抽一次喔！'))return;
@@ -1491,7 +1480,7 @@ function editAnnouncement(existing=null){
 /* ========= 今日首頁 ========= */
 
 function renderHome(){
-  if(!isAdmin()){setTimeout(deliverPendingRewards,350);syncMyLeaderboard()};
+  if(!isAdmin())setTimeout(deliverPendingRewards,350);
  const date=today(),subject=todaySubject(),weekday=dayName(new Date());
  const allWorks=cache.homework||[],allGrades=cache.grades||[],allLessons=cache.progress||[];
  const recentGrades=[...allGrades].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
