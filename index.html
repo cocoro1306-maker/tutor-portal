@@ -303,6 +303,7 @@ const studentCreationAuth=getAuth(studentCreationApp);
 const db=getFirestore(firebaseApp);
 const functions=getFunctions(firebaseApp,"asia-east1");
 const deleteStudentAccount=httpsCallable(functions,"deleteStudentAccount");
+// Spark 免費方案：學生端獨立抽獎，不使用 Cloud Functions
 const $=s=>document.querySelector(s);
 
 const schedule={
@@ -827,7 +828,7 @@ const petAvatar=x=>PET_CHOICES.includes(x?.emoji)?x.emoji:"🐱";
 const defaultPet=()=>({name:"小豆",emoji:"🐱",xp:0,evolutions:0,fedIds:[],drawn:0,pendingBox:-1,bag:{drink50:0,cash100:0,homeworkPass:0},redeemed:{drink50:0,cash100:0,homeworkPass:0}});
 const evolutionFrom=(xp,previous=0)=>{let n=previous;while(n<EVO_MAX&&xp>=milestone(n+1))n++;return n;};
 const petNext=(x)=>milestone(stageCount(x)+1);
-const remainingDraws=p=>Math.max(0,stageCount(p)-Number(p.drawn||0)-(Number(p.pendingBox??-1)>=0?1:0));
+const remainingDraws=p=>Math.max(0,stageCount(p)-Number(p.drawn||0));
 function playEvolveSound(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=new C();[523,659,784,1047,1319].forEach((f,i)=>{const o=c.createOscillator(),g=c.createGain(),t=c.currentTime+i*.13;o.frequency.value=f;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.13,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+.22);o.connect(g).connect(c.destination);o.start(t);o.stop(t+.23)});setTimeout(()=>c.close(),1600)}catch(e){}}
 function evolutionCelebration(){playEvolveSound();const box=document.createElement('div');box.className='evo-overlay';box.innerHTML='<div class="evo-popup">🎊 進化成功！<div style="font-size:86px">'+petAvatar(petData)+'</div><small>寵物變大了！解鎖一次禮物盒抽獎 🎁</small></div>';document.body.append(box);for(let i=0;i<38;i++){const c=document.createElement('span');c.className='evo-confetti';c.textContent=['🌟','💗','🎉','✨','🌸'][i%5];c.style.left=Math.random()*100+'%';c.style.animationDelay=Math.random()*.5+'s';box.append(c)}setTimeout(()=>box.remove(),2400)}
 function feedCelebration(food='🍎',evolved=false){playFeedSound();const pet=$('.pet-emoji'),stage=$('.pet-stage');pet?.classList.add('celebrate');stage?.classList.add('sparkle');if(stage){const flying=document.createElement('span');flying.className='food-fly';flying.textContent=food;stage.append(flying);setTimeout(()=>flying.remove(),1100)}const fx=document.createElement('div');fx.className='feed-fx';document.body.append(fx);['💖','✨','⭐','🍓','💛','🌸','✨','🎉'].forEach((icon,i)=>{const span=document.createElement('span');span.textContent=icon;const angle=i*Math.PI*2/8;span.style.setProperty('--dx',Math.round(Math.cos(angle)*130)+'px');span.style.setProperty('--dy',Math.round(Math.sin(angle)*155)+'px');fx.append(span)});setTimeout(()=>{fx.remove();pet?.classList.remove('celebrate');stage?.classList.remove('sparkle')},1400);if(evolved)setTimeout(evolutionCelebration,850)}
@@ -837,24 +838,56 @@ function renderPet(){
   const p={...defaultPet(),...(petData||{})},n=stageCount(p),xp=Number(p.xp||0),lower=milestone(n),upper=milestone(n+1),progress=Math.max(0,Math.min(100,100*(xp-lower)/(upper-lower))),size=Math.min(180,86+n*18);
   const ready=(cache.homework||[]).filter(w=>getStatus(w)==='done'&&!(p.fedIds||[]).includes(w.id));
   const bag={...defaultPet().bag,...p.bag},redeemed={...defaultPet().redeemed,...p.redeemed};
-  const pending=Number(p.pendingBox??-1);
+  const pending=Number(p.pendingBox??-1); // 舊版待開獎紀錄會在新抽獎時一併清除
   $('#content').innerHTML=`<h2>🐾 我的寵物小屋</h2><p class="muted">每週上課由老師檢查作業，確認完成才獲得食物。每份作業僅能餵食一次；忘記餵食不扣分。</p>
   <div class="pet-stage"><div class="pet-emoji" style="font-size:${size}px" aria-label="寵物">${petAvatar(p)}</div><div class="pet-name">${esc(p.name)} ♡</div>
   <p>Lv. ${petLevel(p)} ・ ${xp} XP ・ ${n>=4?'成熟期':n>=1?'成長期':'幼年期'}</p>
   <div class="pet-bar"><div class="pet-fill" style="width:${progress}%"></div></div><p class="muted">距離下一次進化還需 ${Math.max(0,upper-xp)} XP · 進化後寵物會變大，並獲得抽獎機會</p>
   ${!isAdmin()?`<button id="editPet" class="secondary">✏️ 選擇 Emoji／幫寵物取名</button>`:''}</div>
   <h3>🍱 餵食時間</h3>${ready.length?`<div class="pet-feed-list">${ready.map((w,i)=>`<div class="pet-feed-row"><span>${PET_FOODS[i%4]} ${esc(w.title||w.subject||'完成的作業')}</span>${isAdmin()?'<span class="muted">學生可自行餵食</span>':`<button data-feed="${esc(w.id)}" data-food="${PET_FOODS[i%4]}">餵食 ＋10 XP</button>`}</div>`).join('')}</div>`:'<div class="empty">🌷 目前沒有待領取的食物。老師確認作業完成後就會出現！</div>'}
-  <section class="reward-card"><h3>🎁 進化驚喜禮物盒</h3><p class="muted">每次進化可抽一次，選擇一個神祕禮物盒。中獎機率：50 元飲料券 60%、100 元現金券 10%、作業減免券 30%。</p>
-  <p class="pill">可選盒次數：${remainingDraws(p)}　${pending>=0?'・有 1 次等待老師開獎':''}</p>
-  <div class="gift-grid">${[0,1,2].map(i=>`<button class="gift-box" data-box="${i}" ${isAdmin()||remainingDraws(p)<1||pending>=0?'disabled':''}>🎁<small>神祕禮物 ${'ABC'[i]}</small></button>`).join('')}</div>
-  <p class="muted">${pending>=0?'已選擇禮物盒 '+ 'ABC'[pending]+'，等待老師確認開獎。':remainingDraws(p)>0?'恭喜進化！選一個盒子提出開獎申請。':'下次進化就有新的抽獎機會。'}</p>
-  ${isAdmin()&&pending>=0?'<button id="resolveDraw">🎉 老師確認開獎（發放獎品）</button>':''}</section>
-  <section class="reward-card"><h3>🎒 我的獎品背包</h3>${PRIZES.map((name,i)=>`<div class="bag-row"><span>${name}</span><b>可用 ${Math.max(0,(bag[PRIZE_KEYS[i]]||0)-(redeemed[PRIZE_KEYS[i]]||0))} 張</b>${isAdmin()?`<button class="secondary" data-redeem="${i}" ${bag[PRIZE_KEYS[i]]<=redeemed[PRIZE_KEYS[i]]?'disabled':''}>核銷 1 張</button>`:''}</div>`).join('')}<p class="muted">獎品可累積，兌換或使用作業減免券時由老師核銷。</p></section>
+  <section class="reward-card"><h3>🎁 進化驚喜禮物盒</h3><p class="muted">每次進化可以抽一次！選一個喜歡的禮物盒，立即揭曉驚喜獎品 ♡</p>
+  <p class="pill">可抽獎次數：${remainingDraws(p)}</p>
+  <div class="gift-grid">${[0,1,2].map(i=>`<button class="gift-box" data-box="${i}" ${isAdmin()||remainingDraws(p)<1?'disabled':''}>🎁<small>神祕禮物 ${'ABC'[i]}</small></button>`).join('')}</div>
+  <p class="muted">${remainingDraws(p)>0?'恭喜進化！點擊禮物盒就能立即開獎！':'下次進化就有新的抽獎機會。'}</p>
+  </section>
+  <section class="reward-card"><h3>🎒 我的獎品背包</h3>${PRIZES.map((name,i)=>`<div class="bag-row"><span>${name}</span><b>可用 ${Math.max(0,(bag[PRIZE_KEYS[i]]||0)-(redeemed[PRIZE_KEYS[i]]||0))} 張</b>${isAdmin()?`<button class="secondary" data-redeem="${i}" ${bag[PRIZE_KEYS[i]]<=redeemed[PRIZE_KEYS[i]]?'disabled':''}>核銷 1 張</button>`:''}</div>`).join('')}<p class="muted">獎品可累積，兌換或使用作業減免券時由老師核銷。免費版抽獎在學生裝置進行，不能保證防竄改。</p></section>
   ${isAdmin()?`<section class="reward-card"><h3>🧑‍🏫 老師 XP 結算／獎懲</h3><p class="muted">每週檢查作業後，可視情況加分、扣分或免扣分；每次調整都有紀錄。請先在「作業管理」標記完成，學生才會拿到食物。</p><div class="formgrid"><label>XP 調整（可填負數）<input id="xpDelta" type="number" min="-100" max="100" value="5"></label><label>調整原因<input id="xpReason" maxlength="120" placeholder="例如：本週表現優秀" required></label></div><div class="actions"><button id="adjustXp">儲存 XP 調整</button><button class="secondary" id="waivePenalty">本週免扣 XP（留下紀錄）</button></div></section>`:''}`;
   $('#editPet')?.addEventListener('click',()=>{const dialog=document.createElement('div');dialog.className='pet-modal';dialog.innerHTML=`<div class="pet-dialog"><h3>🐾 自訂我的小夥伴</h3><div class="pet-choice-grid">${PET_CHOICES.map(e=>`<button class="pet-choice ${e===petAvatar(p)?'chosen':''}" data-emoji="${e}">${e}</button>`).join('')}</div><label>寵物名字<input id="petNewName" maxlength="12" value="${esc(p.name)}"></label><div class="actions"><button id="savePet">儲存寵物</button><button class="secondary" id="cancelPet">取消</button></div></div>`;document.body.append(dialog);let chosen=petAvatar(p);dialog.querySelectorAll('[data-emoji]').forEach(btn=>btn.onclick=()=>{chosen=btn.dataset.emoji;dialog.querySelectorAll('[data-emoji]').forEach(x=>x.classList.toggle('chosen',x===btn))});dialog.querySelector('#cancelPet').onclick=()=>dialog.remove();dialog.querySelector('#savePet').onclick=async()=>{const name=dialog.querySelector('#petNewName').value.trim();if(!name||name.length>12){msg('名字需為 1～12 字',true);return}try{const ref=doc(db,'pets',activeUid()),snap=await getDoc(ref);if(snap.exists())await updateDoc(ref,{name,emoji:chosen});else await setDoc(ref,{...defaultPet(),name,emoji:chosen});dialog.remove();await loadExtras();renderPet();msg('寵物外觀與名字已儲存！')}catch(e){msg('儲存失敗：'+e.message,true)}}});
   $('#content').querySelectorAll('[data-feed]').forEach(btn=>btn.onclick=async()=>{btn.disabled=true;const id=btn.dataset.feed,food=btn.dataset.food;let evolved=false;try{await runTransaction(db,async tx=>{const pr=doc(db,'pets',activeUid()),hr=doc(db,'homework',id),hw=await tx.get(hr),ps=await tx.get(pr);if(!hw.exists()||hw.data().studentId!==activeUid()||hw.data().status!=='done')throw Error('老師尚未確認這份作業');if(!ps.exists())throw Error('請先選擇 Emoji 寵物並儲存，再餵食喔！');const old={...defaultPet(),...ps.data()};if((old.fedIds||[]).includes(id))throw Error('已領取這份作業的食物');const next=old.xp+10,ev=evolutionFrom(next,old.evolutions);evolved=ev>old.evolutions;const data={xp:next,evolutions:ev,fedIds:[...old.fedIds,id]};if(ps.exists())tx.update(pr,data);else tx.set(pr,{...old,...data})});await loadExtras();renderPet();feedCelebration(food,evolved);msg(evolved?'🎊 餵食成功！寵物進化，解鎖禮物抽獎！':'餵食成功！獲得 10 XP 💖')}catch(e){btn.disabled=false;msg('餵食失敗：'+e.message,true)}});
-  $('#content').querySelectorAll('[data-box]').forEach(btn=>btn.onclick=async()=>{if(!confirm('確定選擇神祕禮物 '+ 'ABC'[Number(btn.dataset.box)]+' 嗎？選擇後請老師幫你開獎。'))return;try{await updateDoc(doc(db,'pets',activeUid()),{pendingBox:Number(btn.dataset.box)});await loadExtras();renderPet();msg('已選好禮物盒，等待老師開獎！')}catch(e){msg('選擇失敗：'+e.message,true)}});
-  $('#resolveDraw')?.addEventListener('click',async()=>{if(!confirm('確認為這位學生開獎並發放真實獎品？'))return;const btn=$('#resolveDraw');btn.disabled=true;try{const r=crypto.getRandomValues(new Uint32Array(1))[0]/4294967296;const index=r<.6?0:r<.7?1:2;await runTransaction(db,async tx=>{const ref=doc(db,'pets',activeUid()),snap=await tx.get(ref);if(!snap.exists())throw Error('找不到寵物');const p=snap.data();if(Number(p.pendingBox??-1)<0||Number(p.drawn||0)>=Number(p.evolutions||0))throw Error('沒有待開獎機會');const key=PRIZE_KEYS[index];tx.update(ref,{pendingBox:-1,drawn:Number(p.drawn||0)+1,['bag.'+key]:Number(p.bag?.[key]||0)+1});const log=doc(collection(db,'petEvents'));tx.set(log,{studentId:activeUid(),type:'draw',prize:key,box:p.pendingBox,teacherId:me.uid,createdAt:serverTimestamp()})});await loadExtras();renderPet();evolutionCelebration();msg('🎉 恭喜抽中 '+PRIZES[index]+'！已存入背包')}catch(e){btn.disabled=false;msg('開獎失敗：'+e.message,true)}});
+  $('#content').querySelectorAll('[data-box]').forEach(btn=>btn.onclick=async()=>{
+    const box=Number(btn.dataset.box);
+    if(!confirm('要打開神祕禮物 '+ 'ABC'[box] +' 嗎？每次進化只能抽一次喔！'))return;
+    const buttons=[...$('#content').querySelectorAll('[data-box]')];buttons.forEach(b=>b.disabled=true);
+    try{
+      // 每次獨立抽獎：飲料券 74%、現金券 1%、減免券 25%
+      // 此結果在學生端產生，不能提供防竄改保證；獎品需由老師核銷
+      const randomBytes=new Uint32Array(1);
+      crypto.getRandomValues(randomBytes);
+      const roll=randomBytes[0]/4294967296;
+      const prizeKey=roll<0.74?'drink50':roll<0.75?'cash100':'homeworkPass';
+      const prizeIndex=PRIZE_KEYS.indexOf(prizeKey);
+      await runTransaction(db,async tx=>{
+        const petRef=doc(db,'pets',activeUid());
+        const snap=await tx.get(petRef);
+        if(!snap.exists())throw Error('請先建立寵物');
+        const current=snap.data();
+        const available=Math.max(0,Number(current.evolutions||0)-Number(current.drawn||0));
+        if(available<1)throw Error('目前沒有抽獎次數');
+        const oldBag={...defaultPet().bag,...(current.bag||{})};
+        tx.update(petRef,{
+          drawn:Number(current.drawn||0)+1,
+          ['bag.'+prizeKey]:Number(oldBag[prizeKey]||0)+1
+        });
+      });
+      if(prizeIndex<0)throw Error('抽獎結果格式錯誤，請重新整理檢查背包');
+      await loadExtras();renderPet();
+      playEvolveSound();
+      const modal=document.createElement('div');modal.className='pet-modal';
+      modal.innerHTML=`<div class="pet-dialog" style="text-align:center"><div style="font-size:66px">🎁✨</div><h2>恭喜抽中！</h2><p style="font-size:22px;font-weight:750">${PRIZES[prizeIndex]}</p><p class="muted">已記錄在獎品背包，兌換時由老師核銷 ♡</p><button id="closePrizeReveal">開心收下 💗</button></div>`;
+      document.body.append(modal);modal.querySelector('#closePrizeReveal').onclick=()=>modal.remove();
+      msg('🎉 恭喜抽中 '+PRIZES[prizeIndex]+'！已加入背包');
+    }catch(e){buttons.forEach(b=>b.disabled=false);msg('抽獎失敗：'+(e.message||'請稍後再試')+'。若網路中斷，請先重新整理檢查背包。',true)}
+  });
   $('#content').querySelectorAll('[data-redeem]').forEach(btn=>btn.onclick=async()=>{const i=Number(btn.dataset.redeem),key=PRIZE_KEYS[i];if(!confirm('確認核銷 '+PRIZES[i]+' 1 張？'))return;try{await runTransaction(db,async tx=>{const ref=doc(db,'pets',activeUid()),snap=await tx.get(ref);const d=snap.data();if(Number(d.bag?.[key]||0)<=Number(d.redeemed?.[key]||0))throw Error('沒有可核銷的獎品');tx.update(ref,{['redeemed.'+key]:Number(d.redeemed?.[key]||0)+1});tx.set(doc(collection(db,'petEvents')),{studentId:activeUid(),type:'redeem',prize:key,teacherId:me.uid,createdAt:serverTimestamp()})});await loadExtras();renderPet();msg('核銷成功！')}catch(e){msg('核銷失敗：'+e.message,true)}});
   $('#adjustXp')?.addEventListener('click',async()=>{const delta=Number($('#xpDelta').value),reason=$('#xpReason').value.trim();if(!Number.isInteger(delta)||delta===0||Math.abs(delta)>100||!reason){msg('請輸入 -100～100 的非零整數與原因',true);return}try{let evolved=false;await runTransaction(db,async tx=>{const ref=doc(db,'pets',activeUid()),snap=await tx.get(ref),old=snap.exists()?{...defaultPet(),...snap.data()}:defaultPet(),xp=Math.max(0,old.xp+delta),evolutions=evolutionFrom(xp,old.evolutions);evolved=evolutions>old.evolutions;const data={xp,evolutions};if(snap.exists())tx.update(ref,data);else tx.set(ref,{...old,...data});tx.set(doc(collection(db,'petEvents')),{studentId:activeUid(),type:'adjust',delta,reason,teacherId:me.uid,createdAt:serverTimestamp()})});await loadExtras();renderPet();if(evolved)evolutionCelebration();msg('已調整 XP 並記錄原因')}catch(e){msg('XP 調整失敗：'+e.message,true)}});
   $('#waivePenalty')?.addEventListener('click',async()=>{const reason=prompt('請填寫免扣 XP 的原因（例如：學生請假）');if(!reason?.trim())return;try{await addDoc(collection(db,'petEvents'),{studentId:activeUid(),type:'waive',reason:reason.trim(),teacherId:me.uid,createdAt:serverTimestamp()});msg('已記錄本週免扣 XP，寵物不會自動扣分')}catch(e){msg('紀錄失敗：'+e.message,true)}});
