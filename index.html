@@ -271,6 +271,8 @@ input[type=checkbox]{accent-color:#db8d8d}
 @keyframes xp-pop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes xp-bounce{to{transform:translateY(-13px)}}
 @keyframes xp-float{to{transform:translateY(-65vh) rotate(180deg);opacity:0}}
+.teacher-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:640px){.teacher-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -1382,10 +1384,22 @@ function renderHome(){
  const lesson=allLessons.filter(x=>x.date===date);
  if(isAdmin()){
   const waiting=pendingWorks.length;
-  const notTaken=quizzes.reduce((n,q)=>n+(q.targetIds||[]).filter(id=>!quizResult(q,id)).length,0);
+  const notTaken=quizzes.filter(q=>q.released===true).reduce((n,q)=>n+(q.targetIds||[]).filter(id=>!quizResult(q,id)).length,0);
+  const outstanding=quizzes.filter(q=>q.released===true).flatMap(q=>(q.targetIds||[]).filter(id=>!quizResult(q,id)).map(id=>({q,id})));
+  const studentLabel=id=>students.find(x=>x.uid===id)?.name||'學生';
+  const attendanceToday=(cache.attendance||[]).filter(x=>x.date===date);
+  const attendanceMissing=students.filter(x=>!attendanceToday.some(a=>a.studentId===x.uid)).length;
+  const recentTeacherGrades=recentGrades.slice(0,4);
   $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">👩‍🏫 老師工作台</span><h2>${subject?'今天是'+esc(subject)+'課':'今天沒有固定排課'} 🌷</h2><p class="muted">${esc(date)}・星期${weekday}｜整理學生的學習進度</p></div><span class="home-hero-emoji">📚</span></div>
-  <div class="home-stats"><div><b>${students.length}</b><small>學生人數</small></div><div><b>${waiting}</b><small>待處理作業</small></div><div><b>${notTaken}</b><small>待完成測驗人次</small></div></div>
-  <section class="home-block"><h3>✨ 快速管理</h3><div class="home-quick">${quick('homework','📝 作業管理')}${quick('quizzes','🧪 分派測驗')}${quick('attendance','📅 出席登記')}${quick('grades','📊 登記成績')}${quick('progress','📖 學習進度')}${quick('students','👩‍🎓 學生管理')}</div></section>
+  <div class="home-stats teacher-stats"><div><b>${students.length}</b><small>學生人數</small></div><div><b>${waiting}</b><small>待處理作業</small></div><div><b>${notTaken}</b><small>待完成測驗人次</small></div><div><b>${attendanceMissing}</b><small>今日未登記出席</small></div></div>
+  <section class="home-block"><h3>✨ 快速管理</h3><div class="home-quick">${quick('homework','📝 作業管理')}${quick('quizzes','🧪 分派測驗')}${quick('attendance','📅 出席登記')}${quick('grades','📊 登記成績')}${quick('progress','📖 學習進度')}${quick('students','👩‍🎓 學生管理')}${quick('announcements','📢 發布公告')}${quick('materials','📚 教材管理')}</div></section>
+  <section class="home-block"><div class="top"><h3>🔔 待處理事項</h3><span class="pill">${waiting+notTaken+attendanceMissing} 項提醒</span></div>
+  ${waiting?`<div class="home-list-row"><div><b>📝 ${waiting} 份作業尚未完成或待處理</b><p class="muted">查看學生的作業狀態</p></div>${quick('homework','查看 →')}</div>`:''}
+  ${attendanceMissing?`<div class="home-list-row"><div><b>📅 ${attendanceMissing} 位學生今天尚未登記出席</b><p class="muted">沒有排課的學生可略過</p></div>${quick('attendance','登記 →')}</div>`:''}
+  ${outstanding.slice(0,5).map(({q,id})=>`<div class="home-list-row"><div><b>🧪 ${esc(studentLabel(id))}・${esc(q.title)}</b><p class="muted">已開放測驗，尚未完成</p></div>${quick('quizzes','查看 →')}</div>`).join('')}
+  ${!waiting&&!notTaken&&!attendanceMissing?'<p class="muted">目前沒有待處理提醒 🌷</p>':''}</section>
+  <section class="home-block"><div class="top"><h3>📊 最近登記成績</h3>${quick('grades','查看全部 →')}</div>
+  ${recentTeacherGrades.length?recentTeacherGrades.map(g=>`<div class="home-list-row"><div><b>${esc(studentLabel(g.studentId))}・${esc(g.title||'考試')}</b><p class="muted">${esc(g.date||'')}・${esc(g.subject||'')}</p></div><strong class="home-score">${esc(g.score)} 分</strong></div>`).join(''):'<p class="muted">還沒有成績紀錄</p>'}</section>
   <section class="home-block"><div class="top"><h3>📋 今日課程</h3>${quick('progress','查看進度 →')}</div>${lesson.length?lesson.map(x=>`<div class="home-list-row"><div><b>${esc(x.title||x.subject||'課程')}</b><p class="muted">${esc(x.detail||'')}</p></div></div>`).join(''):'<p class="muted">今天還沒有新增課程進度</p>'}</section>${announcementBlock}
   <section class="home-block"><h3>🗓️ 每週固定課表</h3><p class="muted">週三 理化　・　週四 數學　・　週六 生物</p></section>`;
  }else{
