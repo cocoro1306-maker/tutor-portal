@@ -216,6 +216,9 @@ input[type=checkbox]{accent-color:#db8d8d}
 .grade-legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin:8px 0 12px}.grade-legend-item{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#775C67}.grade-legend-item i{display:inline-block;width:12px;height:12px;border-radius:50%}.grade-section .item{background:white}
 @media(max-width:600px){.grade-section{padding:12px}.grade-section .formgrid{grid-template-columns:1fr}}
 
+.notice-body{white-space:pre-wrap;line-height:1.8;overflow-wrap:anywhere}
+.notice-pinned{border-color:#e5b7c4;background:#fff8f9}
+.notice-home{margin:20px 0}
 </style>
 </head>
 <body>
@@ -290,7 +293,7 @@ import {
 
 import {
   getFirestore,doc,getDoc,collection,query,where,
-  getDocs,addDoc,updateDoc,deleteDoc,serverTimestamp,setDoc,runTransaction
+  getDocs,addDoc,updateDoc,deleteDoc,serverTimestamp,setDoc,runTransaction,arrayUnion
 } from
 "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {getFunctions,httpsCallable} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js";
@@ -314,6 +317,7 @@ const schedule={
 
 const names={
   home:"今日課程",
+  announcements:"公告欄",
   progress:"課程進度",
   homework:"作業管理",
   grades:"成績管理",
@@ -374,6 +378,7 @@ let initialForm=null;
 let petData=null;
 let diaryEntries=[];
 let formRecipients=[];
+let announcements=[];
 
 function esc(value){
   return String(value??"").replace(/[&<>"']/g,c=>({
@@ -477,6 +482,7 @@ async function reload(){
     }
 
     await loadExtras();
+    await loadAnnouncements();
     render();
   }catch(error){
     msg("資料讀取失敗："+error.message,true);
@@ -774,7 +780,7 @@ function render(){
     ([key,label])=>`
       <button data-tab="${key}"
         class="${tab===key?"active":""}">
-        ${({home:"🏠",progress:"📖",homework:"📝",grades:"📊",materials:"📚",mistakes:"🔍",attendance:"📅",students:"👩‍🏫",pet:"🐣",diary:"💌"})[key]} ${label}
+        ${({home:"🏠",announcements:"📢",progress:"📖",homework:"📝",grades:"📊",materials:"📚",mistakes:"🔍",attendance:"📅",students:"👩‍🏫",pet:"🐣",diary:"💌"})[key]} ${label}
       </button>
     `
   ).join("");
@@ -787,6 +793,7 @@ function render(){
     };
   });
 
+  if(tab==="announcements"){renderAnnouncements();return;}
   if(tab==="pet"){renderPet();return;}
   if(tab==="diary"){renderDiary();return;}
   if(tab==="students"&&isAdmin()){
@@ -920,6 +927,87 @@ function renderDiary(){
   });
 }
 
+/* ========= 公告欄 ========= */
+function announcementActive(a){
+  return !a.expiresAt || a.expiresAt>=today();
+}
+function visibleAnnouncements(){
+  return announcements.filter(a=>announcementActive(a)).sort((a,b)=>
+    Number(!!b.pinned)-Number(!!a.pinned) ||
+    (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+}
+async function loadAnnouncements(){
+  if(!me){announcements=[];return;}
+  const q=isAdmin()?collection(db,"announcements"):
+    query(collection(db,"announcements"),where("targetIds","array-contains",me.uid));
+  const snap=await getDocs(q);
+  announcements=snap.docs.map(d=>({id:d.id,...d.data()}));
+}
+function renderAnnouncements(){
+  const items=visibleAnnouncements();
+  const all=isAdmin()?announcements:items;
+  const nameOf=id=>allStudentProfiles.find(s=>s.uid===id)?.name||id;
+  $("#content").innerHTML=`
+    <div class="top"><h2>📢 公告欄</h2>${isAdmin()?'<button id="newAnnouncement">＋發布公告</button>':''}</div>
+    <p class="muted">${isAdmin()?"可指定公告對象、置頂與到期日期，並查看學生是否已讀。":"請記得查看老師發布的課程及調課通知。"}</p>
+    ${all.length?all.map(a=>`
+      <article class="item ${a.pinned?'notice-pinned':''}">
+        <div class="top"><div><span class="pill">${esc(a.category||'一般公告')}</span> ${a.pinned?'📌 置頂':''} ${!announcementActive(a)?'<span class="muted">（已到期）</span>':''}</div>
+        ${!isAdmin()&&!a.readBy?.includes(me.uid)?'<span class="pill">未讀</span>':''}</div>
+        <h3>${esc(a.title||'未命名公告')}</h3><p class="notice-body">${esc(a.body||'')}</p>
+        <p class="muted">${a.expiresAt?'有效至 '+esc(a.expiresAt)+' · ':''}${a.createdAt?.toDate?.().toLocaleDateString('zh-TW')||''}</p>
+        ${isAdmin()?`<p class="muted">發送給：${(a.targetIds||[]).map(id=>esc(nameOf(id))).join('、')}</p>
+          <p class="muted">已讀 ${(a.targetIds||[]).filter(id=>(a.readBy||[]).includes(id)).length} / ${(a.targetIds||[]).length} 人
+          · ${(a.targetIds||[]).filter(id=>(a.readBy||[]).includes(id)).map(id=>esc(nameOf(id))).join('、')||'尚無'}</p>
+          <div class="actions"><button class="secondary" data-edit-notice="${esc(a.id)}">編輯</button><button class="danger" data-delete-notice="${esc(a.id)}">刪除</button></div>`:
+          `<button class="secondary" data-read-notice="${esc(a.id)}" ${(a.readBy||[]).includes(me.uid)?'disabled':''}>${(a.readBy||[]).includes(me.uid)?'✓ 已讀':'標記已讀'}</button>`}
+      </article>`).join(''):'<div class="empty">目前沒有公告 🌷</div>'}
+    ${isAdmin()?'<div id="announcementEditor"></div>':''}`;
+  $("#newAnnouncement")?.addEventListener("click",()=>editAnnouncement());
+  $("#content").querySelectorAll("[data-edit-notice]").forEach(b=>b.onclick=()=>editAnnouncement(announcements.find(a=>a.id===b.dataset.editNotice)));
+  $("#content").querySelectorAll("[data-delete-notice]").forEach(b=>b.onclick=async()=>{
+    if(!confirm('確定刪除這則公告？'))return;
+    try{await deleteDoc(doc(db,'announcements',b.dataset.deleteNotice));await loadAnnouncements();renderAnnouncements();msg('公告已刪除');}
+    catch(e){msg('刪除失敗：'+e.message,true);}
+  });
+  $("#content").querySelectorAll("[data-read-notice]").forEach(b=>b.onclick=async()=>{
+    b.disabled=true;
+    try{await updateDoc(doc(db,'announcements',b.dataset.readNotice),{readBy:arrayUnion(me.uid)});await loadAnnouncements();renderAnnouncements();msg('已標記為已讀');}
+    catch(e){b.disabled=false;msg('已讀更新失敗：'+e.message,true);}
+  });
+}
+function editAnnouncement(existing=null){
+  if(!isAdmin())return;
+  const host=$("#announcementEditor");
+  host.innerHTML=`<section class="curriculum-box"><h3>${existing?'編輯':'新增'}公告</h3>
+    <form id="noticeForm" class="formgrid">
+      <label>公告分類<select name="category">${['一般公告','考前複習','調課通知','作業提醒','其他'].map(v=>`<option ${existing?.category===v?'selected':''}>${v}</option>`).join('')}</select></label>
+      <label>到期日期（可留空）<input type="date" name="expiresAt" value="${esc(existing?.expiresAt||'')}"></label>
+      <label class="full">公告標題<input name="title" maxlength="100" required value="${esc(existing?.title||'')}"></label>
+      <label class="full">公告內容<textarea name="body" maxlength="3000" required>${esc(existing?.body||'')}</textarea></label>
+      <label class="full"><input type="checkbox" name="pinned" ${existing?.pinned?'checked':''}> 📌 置頂公告</label>
+      <div class="full"><div class="top"><strong>發送對象</strong><button type="button" class="secondary" id="noticeSelectAll">全選／取消全選</button></div>
+      <div class="student-list" id="noticeTargets">${students.map(st=>`<label class="student-check"><input type="checkbox" value="${esc(st.uid)}" ${existing?(existing.targetIds||[]).includes(st.uid)?'checked':'':'checked'}>${esc(st.name||st.uid)}</label>`).join('')}</div></div>
+      <div class="actions full"><button type="submit">${existing?'儲存修改':'發布公告'}</button><button type="button" class="secondary" id="noticeCancel">取消</button></div>
+    </form></section>`;
+  host.scrollIntoView({behavior:'smooth',block:'start'});
+  $("#noticeCancel").onclick=()=>host.innerHTML='';
+  $("#noticeSelectAll").onclick=()=>{const boxes=[...host.querySelectorAll('#noticeTargets input')],check=boxes.some(b=>!b.checked);boxes.forEach(b=>b.checked=check);};
+  $("#noticeForm").onsubmit=async e=>{
+    e.preventDefault();const f=new FormData(e.target);
+    const targetIds=[...host.querySelectorAll('#noticeTargets input:checked')].map(x=>x.value);
+    if(!targetIds.length){msg('請至少選擇一位學生',true);return;}
+    const data={category:String(f.get('category')),title:String(f.get('title')).trim(),body:String(f.get('body')).trim(),expiresAt:String(f.get('expiresAt')||''),pinned:f.has('pinned'),targetIds};
+    if(!data.title||!data.body){msg('請填寫公告標題與內容',true);return;}
+    const btn=e.target.querySelector('[type=submit]');btn.disabled=true;
+    try{
+      if(existing){await updateDoc(doc(db,'announcements',existing.id),{...data,readBy:(existing.readBy||[]).filter(id=>targetIds.includes(id))});}
+      else{await addDoc(collection(db,'announcements'),{...data,readBy:[],createdAt:serverTimestamp(),teacherId:me.uid});}
+      await loadAnnouncements();renderAnnouncements();msg(existing?'公告已更新':'公告發布成功');
+    }catch(error){btn.disabled=false;msg('公告儲存失敗：'+error.message,true);}
+  };
+}
+
 /* ========= 今日首頁 ========= */
 
 function renderHome(){
@@ -944,6 +1032,7 @@ function renderHome(){
     x=>x.date===date&&x.subject===subject
   );
 
+  const noticePreview=visibleAnnouncements().slice(0,3);
   $("#content").innerHTML=`
     <div class="today-card">
       <p class="muted">📅 ${date} 星期${weekday}</p>
@@ -970,6 +1059,8 @@ function renderHome(){
       `:""}
     </div>
 
+    <div class="notice-home"><div class="top"><h3>📢 最新公告</h3><button type="button" class="secondary" id="viewNotices">查看全部</button></div>
+      ${noticePreview.length?noticePreview.map(a=>`<div class="item"><div class="top"><strong>${a.pinned?"📌 ":""}${esc(a.title)}</strong>${!isAdmin()&&!a.readBy?.includes(me.uid)?'<span class="pill">未讀</span>':""}</div><p>${esc(a.body).slice(0,110)}${a.body.length>110?"…":""}</p></div>`).join(""):"<p class=\"muted\">目前沒有公告</p>"}</div>
     <h3>每週固定課表</h3>
     <div class="schedule">
       <span>星期三｜理化</span>
@@ -1029,6 +1120,7 @@ function renderHome(){
     `:""}
   `;
 
+  $("#viewNotices")?.addEventListener("click",()=>{tab="announcements";render();});
   $("#content").querySelectorAll("[data-quick]").forEach(b=>{
     b.onclick=()=>{
       const kind=b.dataset.quick;
@@ -2029,6 +2121,7 @@ onAuthStateChanged(auth,async user=>{
     profile=null;
     selected="";
     cache={};
+    announcements=[];
     msg("");
     return;
   }
