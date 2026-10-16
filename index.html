@@ -249,6 +249,16 @@ input[type=checkbox]{accent-color:#db8d8d}
 .home-block{border:1px solid #f1e1d5;border-radius:20px;padding:16px;margin:14px 0;background:#fffdf9}.home-block h3{margin:4px 0 13px}.home-block .top{margin-bottom:8px}.home-block .top button{font-size:13px;min-height:34px;padding:7px 10px}.home-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #f2e9e0}.home-list-row:last-child{border:0}.home-list-row>div{min-width:0}.home-list-row p{margin:5px 0 0;font-size:13px;overflow-wrap:anywhere}.home-list-row button{white-space:nowrap}.home-score{color:#38916b;font-size:23px;white-space:nowrap}.home-quick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.home-quick button{text-align:left;min-height:53px;background:#fff1e7;color:#805e66;border:1px solid #f0d7d7}
 .quiz-import{background:#fff6f4;border:1px dashed #dca9b6;border-radius:16px;padding:14px;margin:15px 0}.quiz-import input[type=file]{width:100%;max-width:100%}.quiz-import .muted{font-size:13px}.quiz-question-edit{margin:13px 0}.quiz-question-edit label{display:block;margin:10px 0}.quiz-question-edit .top h4{margin:0}
 @media(max-width:600px){.home-welcome{padding:15px}.home-hero-emoji{font-size:42px}.home-block{padding:13px}.home-stats{gap:6px}.home-stats>div{padding:13px 4px}.home-stats small{font-size:11px}}
+
+/* 學生首頁：手機優先的快捷入口與學習摘要 */
+.student-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+.student-shortcuts button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;min-height:80px;padding:15px!important;text-align:left;border-radius:17px!important;background:#fff4ee!important;border:1px solid #f0d9d1!important;color:#805a66!important;font-weight:750}
+.student-shortcuts button:nth-child(3){background:#fff0f4!important}.student-shortcuts button:nth-child(4){background:#fff9e9!important}
+.student-shortcuts button small{font-weight:400;font-size:12px;color:#9a807b}
+.student-achievements{display:flex;flex-wrap:wrap;gap:8px}
+.student-achievements span{border-radius:12px;background:#fff2ec;border:1px solid #f3e2d9;padding:10px 12px;color:#795e61;font-size:13px}
+.student-achievements b{color:#bd7185}
+@media(max-width:420px){.home-welcome{padding:16px}.home-stats>div{padding:12px 5px}.student-shortcuts button{min-height:75px;padding:11px!important}.home-block{padding:13px}}
 </style>
 </head>
 <body>
@@ -1231,12 +1241,24 @@ function renderHome(){
  }else{
   const p={...defaultPet(),...(petData||{})},xp=Number(p.xp||0),n=stageCount(p),lower=milestone(n),upper=milestone(n+1),percent=Math.min(100,Math.max(0,100*(xp-lower)/(upper-lower)));
   const recent=recentGrades[0];
+  const doneQuizzes=quizzes.filter(q=>quizResult(q,activeUid()));
+  const doneWorks=allWorks.filter(w=>getStatus(w)==='done');
+  const currentLesson=[...allLessons].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))[0];
+  const unread=visibleAnnouncements().filter(a=>!(a.readBy||[]).includes(me.uid)).length;
   $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">🌼 每天進步一點點</span><h2>今天也一起加油吧！</h2><p class="muted">${esc(date)}・星期${weekday}${subject?'｜今天是'+esc(subject)+'課':''}</p></div><span class="home-hero-emoji">${petAvatar(p)}</span><div class="home-petbar"><div class="top"><b>${esc(p.name||'我的寵物')}・Lv. ${petLevel(p)}</b><span>${xp} XP</span></div><div class="home-track"><div style="width:${percent}%"></div></div><small>距離下一次進化還需 ${Math.max(0,upper-xp)} XP</small></div></div>
   <div class="home-stats"><div><b>${pendingWorks.length}</b><small>待完成作業</small></div><div><b>${pendingQuizzes.length}</b><small>待完成測驗</small></div><div><b>${recent?esc(recent.score):'—'}</b><small>最近考試</small></div></div>
+  <div class="student-shortcuts">
+    <button data-home-tab="quizzes">🧪 開始預習 <small>${pendingQuizzes.length} 份待完成</small></button>
+    <button data-home-tab="homework">📝 我的作業 <small>${doneWorks.length} 份已完成</small></button>
+    <button data-home-tab="pet">🐾 寵物小屋 <small>${xp} XP</small></button>
+    <button data-home-tab="announcements">📢 老師公告 <small>${unread} 則未讀</small></button>
+  </div>
+  <section class="home-block home-learning"><div class="top"><h3>📖 目前學習進度</h3>${quick('progress','查看進度 →')}</div>${currentLesson?`<div class="home-list-row"><div><b>${esc(currentLesson.title||currentLesson.subject||'本週課程')}</b><p class="muted">${esc(currentLesson.detail||'持續累積每天的進步！')}</p><p class="muted">${esc(currentLesson.date||'')}</p></div><span class="pill">${esc(currentLesson.subject||'學習中')}</span></div>`:'<p class="muted">老師更新課程後，就會在這裡顯示最新學習進度。</p>'}</section>
   <section class="home-block"><div class="top"><h3>📋 我的學習任務</h3>${quick('homework','查看作業 →')}</div>
   ${pendingQuizzes.slice(0,4).map(q=>`<div class="home-list-row"><div><b>🧪 ${esc(q.title)}</b><p class="muted">${(q.questions||[]).length} 題互動測驗・完成後可領取 +3 XP</p></div><button data-home-quiz="${esc(q.id)}">開始 →</button></div>`).join('')}
   ${pendingWorks.slice(0,5).map(w=>`<div class="home-list-row"><div><b>📝 ${esc(w.title||'作業')}</b><p class="muted">${esc(w.date||'')}・${esc(statusNames[getStatus(w)]||'待完成')}</p></div><span class="pill">待完成</span></div>`).join('')}
   ${!pendingQuizzes.length&&!pendingWorks.length?'<p class="muted">目前沒有待完成任務，做得很棒！✨</p>':''}</section>
+  <section class="home-block"><div class="top"><h3>🎯 我的完成紀錄</h3>${quick('quizzes','查看測驗 →')}</div><div class="student-achievements"><span>🧪 已完成測驗 <b>${doneQuizzes.length}</b> 份</span><span>📝 已完成作業 <b>${doneWorks.length}</b> 份</span><span>🐷 寵物經驗 <b>${xp}</b> XP</span></div></section>
   ${announcementBlock}
   <section class="home-block"><div class="top"><h3>📈 最近學習成果</h3>${quick('grades','查看成績 →')}</div>${recent?`<div class="home-list-row"><div><b>${esc(recent.title||'最近考試')}</b><p class="muted">${esc(recent.date||'')}・${esc(recent.subject||'')}</p></div><strong class="home-score">${esc(recent.score)} / 100</strong></div>`:'<p class="muted">還沒有考試紀錄</p>'}</section>
   <section class="home-block"><div class="top"><h3>💌 今日心情</h3>${quick('diary','寫下今天的心情 →')}</div><p class="muted">今天學會了什麼？來留下一點小紀錄吧！ 🌸</p></section>`;
