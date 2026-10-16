@@ -876,7 +876,7 @@ function renderPet(){
         const oldBag={...defaultPet().bag,...(current.bag||{})};
         tx.update(petRef,{
           drawn:Number(current.drawn||0)+1,
-          ['bag.'+prizeKey]:Number(oldBag[prizeKey]||0)+1
+          bag:{...oldBag,[prizeKey]:Number(oldBag[prizeKey]||0)+1}
         });
       });
       if(prizeIndex<0)throw Error('抽獎結果格式錯誤，請重新整理檢查背包');
@@ -886,7 +886,7 @@ function renderPet(){
       modal.innerHTML=`<div class="pet-dialog" style="text-align:center"><div style="font-size:66px">🎁✨</div><h2>恭喜抽中！</h2><p style="font-size:22px;font-weight:750">${PRIZES[prizeIndex]}</p><p class="muted">已記錄在獎品背包，兌換時由老師核銷 ♡</p><button id="closePrizeReveal">開心收下 💗</button></div>`;
       document.body.append(modal);modal.querySelector('#closePrizeReveal').onclick=()=>modal.remove();
       msg('🎉 恭喜抽中 '+PRIZES[prizeIndex]+'！已加入背包');
-    }catch(e){buttons.forEach(b=>b.disabled=false);msg('抽獎失敗：'+(e.message||'請稍後再試')+'。若網路中斷，請先重新整理檢查背包。',true)}
+    }catch(e){buttons.forEach(b=>b.disabled=false);msg('抽獎失敗：'+(e.message||'請稍後再試')+(e.code==='permission-denied'?'。請老師更新並發布新版 Firestore 規則；舊寵物資料也可能需要相容處理。':'。若網路中斷，請先重新整理檢查背包。'),true)}
   });
   $('#content').querySelectorAll('[data-redeem]').forEach(btn=>btn.onclick=async()=>{const i=Number(btn.dataset.redeem),key=PRIZE_KEYS[i];if(!confirm('確認核銷 '+PRIZES[i]+' 1 張？'))return;try{await runTransaction(db,async tx=>{const ref=doc(db,'pets',activeUid()),snap=await tx.get(ref);const d=snap.data();if(Number(d.bag?.[key]||0)<=Number(d.redeemed?.[key]||0))throw Error('沒有可核銷的獎品');tx.update(ref,{['redeemed.'+key]:Number(d.redeemed?.[key]||0)+1});tx.set(doc(collection(db,'petEvents')),{studentId:activeUid(),type:'redeem',prize:key,teacherId:me.uid,createdAt:serverTimestamp()})});await loadExtras();renderPet();msg('核銷成功！')}catch(e){msg('核銷失敗：'+e.message,true)}});
   $('#adjustXp')?.addEventListener('click',async()=>{const delta=Number($('#xpDelta').value),reason=$('#xpReason').value.trim();if(!Number.isInteger(delta)||delta===0||Math.abs(delta)>100||!reason){msg('請輸入 -100～100 的非零整數與原因',true);return}try{let evolved=false;await runTransaction(db,async tx=>{const ref=doc(db,'pets',activeUid()),snap=await tx.get(ref),old=snap.exists()?{...defaultPet(),...snap.data()}:defaultPet(),xp=Math.max(0,old.xp+delta),evolutions=evolutionFrom(xp,old.evolutions);evolved=evolutions>old.evolutions;const data={xp,evolutions};if(snap.exists())tx.update(ref,data);else tx.set(ref,{...old,...data});tx.set(doc(collection(db,'petEvents')),{studentId:activeUid(),type:'adjust',delta,reason,teacherId:me.uid,createdAt:serverTimestamp()})});await loadExtras();renderPet();if(evolved)evolutionCelebration();msg('已調整 XP 並記錄原因')}catch(e){msg('XP 調整失敗：'+e.message,true)}});
