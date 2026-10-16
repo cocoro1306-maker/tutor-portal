@@ -1000,12 +1000,33 @@ async function showQuizTake(q){
     host.querySelector('#quiz-feedback').innerHTML=`<div class="quiz-feedback ${ok?'quiz-feedback-good':'quiz-feedback-bad'}"><strong>${ok?'✓ 答對了！':'✕ 答錯了'}</strong><p>正確答案：${'ABCD'[k.correct]}．${esc(x.options[k.correct])}</p><p><b>詳解：</b>${esc(k.explanation||'老師尚未提供詳解')}</p></div>`;
     host.querySelector('#quiz-next').style.display='inline-flex';
    });
-   host.querySelector('#quiz-next').onclick=async()=>{if(!locked)return;if(index<q.questions.length-1){index++;draw();return}const btn=host.querySelector('#quiz-next');btn.disabled=true;btn.textContent='正在儲存成績…';const score=answers.reduce((n,a,i)=>n+(a===keys[i].correct?(q.questions[i].points||10):0),0);try{await setDoc(doc(db,'quizSubmissions',q.id+'_'+me.uid),{quizId:q.id,studentId:me.uid,answers,submittedAt:serverTimestamp(),score,graded:true});await loadQuizzes();renderQuizzes();showQuizMy(quizzes.find(x=>x.id===q.id));msg('測驗完成，成績已儲存')}catch(e){btn.disabled=false;btn.textContent='重試儲存成績';msg('成績儲存失敗：'+e.message,true)}};
+   host.querySelector('#quiz-next').onclick=async()=>{if(!locked)return;if(index<q.questions.length-1){index++;draw();return}const btn=host.querySelector('#quiz-next');btn.disabled=true;btn.textContent='正在儲存成績…';const score=answers.reduce((n,a,i)=>n+(a===keys[i].correct?(q.questions[i].points||10):0),0);try{let gained=0;let xpBefore=null;let xpAfter=null;
+    await runTransaction(db,async tx=>{
+      const submissionRef=doc(db,'quizSubmissions',q.id+'_'+me.uid);
+      const petRef=doc(db,'pets',me.uid);
+      const [existing,petSnap]=await Promise.all([tx.get(submissionRef),tx.get(petRef)]);
+      if(existing.exists())throw Error('這份測驗已繳交，無法重複領取獎勵');
+      tx.set(submissionRef,{quizId:q.id,studentId:me.uid,answers,submittedAt:serverTimestamp(),score,graded:true});
+      if(petSnap.exists()){
+        const pet={...defaultPet(),...petSnap.data()};
+        const claimed=pet.quizRewardIds||[];
+        if(!claimed.includes(q.id)){
+          xpBefore=Number(pet.xp||0);xpAfter=xpBefore+3;gained=3;
+          tx.update(petRef,{xp:xpAfter,evolutions:evolutionFrom(xpAfter,pet.evolutions||0),quizRewardIds:[...claimed,q.id]});
+        }
+      }
+    });
+    await loadQuizzes();renderQuizzes();await showQuizMy(quizzes.find(x=>x.id===q.id));
+    if(gained)msg('測驗完成！獲得 +3 XP 🎉');
+    else msg('測驗完成，成績已儲存；尚未建立寵物，請先到寵物頁面建立寵物才能領取往後測驗的 XP');}catch(e){btn.disabled=false;btn.textContent='重試儲存成績';msg('成績儲存失敗：'+e.message,true)}};
   }
   draw();
  }catch(e){host.innerHTML='';msg('測驗無法開啟：'+e.message,true)}
 }
-async function showQuizMy(q){const sub=quizResult(q,me.uid),host=document.getElementById('quiz-detail-'+q.id);if(!sub)return;try{const keys=await loadQuizKeys(q.id);const correct=sub.answers.filter((a,i)=>a===keys[i]?.correct).length;host.innerHTML=`<section class="quiz-play"><h3>🎉 測驗完成！</h3><p class="quiz-score">${correct} / ${q.questions.length} 題答對</p><p class="muted">得分 ${sub.score??'—'} 分</p>${q.questions.map((x,i)=>`<div class="quiz-review"><b>${i+1}. ${esc(x.text)}</b><p class="${sub.answers[i]===keys[i]?.correct?'quiz-good-text':'quiz-bad-text'}">${sub.answers[i]===keys[i]?.correct?'✓ 答對':'✕ 答錯'} · 你的答案 ${'ABCD'[sub.answers[i]]||'—'} · 正確答案 ${'ABCD'[keys[i]?.correct]||'—'}</p><p>${esc(keys[i]?.explanation||'老師尚未提供詳解')}</p></div>`).join('')}</section>`}catch(e){msg('結果讀取失敗：'+e.message,true)}}
+async function showQuizMy(q){const sub=quizResult(q,me.uid),host=document.getElementById('quiz-detail-'+q.id);if(!sub)return;try{const keys=await loadQuizKeys(q.id);const correct=sub.answers.filter((a,i)=>a===keys[i]?.correct).length;host.innerHTML=`<section class="quiz-play"><h3>🎉 測驗完成！</h3><p class="quiz-score">${correct} / ${q.questions.length} 題答對</p><p class="muted">得分 ${sub.score??'—'} 分</p><div id="quiz-xp-status" class="quiz-feedback quiz-feedback-good">正在確認經驗值…</div>${q.questions.map((x,i)=>`<div class="quiz-review"><b>${i+1}. ${esc(x.text)}</b><p class="${sub.answers[i]===keys[i]?.correct?'quiz-good-text':'quiz-bad-text'}">${sub.answers[i]===keys[i]?.correct?'✓ 答對':'✕ 答錯'} · 你的答案 ${'ABCD'[sub.answers[i]]||'—'} · 正確答案 ${'ABCD'[keys[i]?.correct]||'—'}</p><p>${esc(keys[i]?.explanation||'老師尚未提供詳解')}</p></div>`).join('')}</section>`;
+ const petSnap=await getDoc(doc(db,'pets',me.uid));const pet=petSnap.data();const earned=(pet?.quizRewardIds||[]).includes(q.id);const el=host.querySelector('#quiz-xp-status');
+ if(el)el.innerHTML=earned?`<strong>🎉 本次測驗獎勵 +3 XP</strong><p>目前累積 ${Number(pet.xp||0)} XP</p>`:'<strong>尚未領取本次 +3 XP</strong><p>請先到寵物頁面建立寵物；若是舊測驗紀錄，請聯絡老師補發</p>';
+ }catch(e){msg('結果讀取失敗：'+e.message,true)}}
 async function loadQuizKeys(id){const snap=await getDoc(doc(db,'quizKeys',id));return snap.data()?.keys||[]}
 async function showQuizResults(q){const host=document.getElementById('quiz-detail-'+q.id);const subs=quizSubmissions.filter(x=>x.quizId===q.id);host.innerHTML=`<section class="curriculum-box"><h4>自動批改成績</h4>${(q.targetIds||[]).map(uid=>{const sub=subs.find(x=>x.studentId===uid);return `<div class="item"><b>${esc(quizStudentName(uid))}</b>：${sub?(sub.score===null?'舊版待批改紀錄':sub.score+' 分'):'尚未完成'}</div>`}).join('')}</section>`}
 
