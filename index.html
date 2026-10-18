@@ -294,6 +294,7 @@ input[type=checkbox]{accent-color:#db8d8d}
 .student-shortcuts .todo-dot{position:absolute!important;display:flex!important;align-items:center;justify-content:center;top:-10px!important;right:-9px!important;left:auto!important;bottom:auto!important;z-index:15!important;min-width:29px;height:29px;width:auto;padding:0 6px;box-sizing:border-box;border-radius:999px;background:#f0192f!important;color:white!important;font:700 15px/1 system-ui,-apple-system,sans-serif!important;border:2px solid white!important;box-shadow:0 2px 5px #9e5769aa;pointer-events:none;flex:none!important;white-space:nowrap}
 .student-shortcuts .todo-dot[data-count="large"]{font-size:12px!important}
 .student-shortcuts button:focus-visible{outline:3px solid #df7993;outline-offset:2px}
+.teacher-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:10px;margin:12px 0}.teacher-student-card{border:1px solid #f0d9d9;border-radius:14px;background:#fff8f5;padding:13px}.teacher-student-card h4{margin:0 0 9px}.teacher-student-card p{margin:6px 0;color:#876b70;font-size:13px}.teacher-alert{display:inline-flex;align-items:center;justify-content:center;background:#ed1c34;color:white;border-radius:999px;min-width:25px;height:25px;padding:0 6px;font-weight:800;font-size:13px;box-shadow:0 2px 5px #b24d5b55}.teacher-alert.inline{vertical-align:middle;margin-left:6px}.gift-card{background:linear-gradient(125deg,#fff0c9,#ffe6ee);border:2px solid #f3cba9;border-radius:16px;padding:18px;margin:14px 0}.gift-card h3{margin:0 0 8px}.gift-card button{background:#e4769d}
 </style>
 </head>
 <body>
@@ -454,6 +455,7 @@ let formRecipients=[];
 let announcements=[];
 let quizzes=[];
 let quizSubmissions=[];
+let teacherOverview={homework:[],grades:[],attendance:[],progress:[]};
 
 function esc(value){
   return String(value??"").replace(/[&<>"']/g,c=>({
@@ -572,6 +574,11 @@ async function reload(){
     await loadExtras();
     await loadAnnouncements();
     await loadQuizzes();
+    if(isAdmin()){
+      const kinds=['homework','grades','attendance','progress'];
+      const results=await Promise.all(kinds.map(k=>getDocs(collection(db,k))));
+      teacherOverview=Object.fromEntries(kinds.map((k,i)=>[k,results[i].docs.map(d=>({id:d.id,...d.data()}))]));
+    }
     render();
   }catch(error){
     msg("資料讀取失敗："+error.message,true);
@@ -987,6 +994,29 @@ async function deliverPendingRewards(){
   }catch(e){console.warn('獎勵提醒讀取失敗',e)}
 }
 const seenRewards=new Set();
+async function claimStarterGift(){
+  if(isAdmin()||!me?.uid||profile?.starterGift!==35)return;
+  const pr=doc(db,'pets',me.uid);
+  try{
+    const existing=await getDoc(pr);
+    if(!existing.exists())await setDoc(pr,defaultPet());
+    let claimed=false;
+    await runTransaction(db,async tx=>{
+      const ps=await tx.get(pr);
+      if(!ps.exists())throw Error('寵物尚未建立，請重新操作');
+      const old={...defaultPet(),...ps.data()};
+      if(old.starterGiftClaimed===true)return;
+      const xp=Number(old.xp||0)+35;
+      tx.update(pr,{xp,evolutions:evolutionFrom(xp,old.evolutions),starterGiftClaimed:true});
+      claimed=true;
+    });
+    await loadExtras();render();
+    if(claimed){xpCelebration(35,'新生限定新手禮包');msg('🎁 新手禮包領取成功！獲得 35 XP');}
+    else msg('新手禮包已經領取過囉！');
+  }catch(e){msg('新手禮包領取失敗：'+e.message,true)}
+}
+function starterGiftHTML(){return !isAdmin()&&profile?.starterGift===35&&!petData?.starterGiftClaimed?'<div class="gift-card"><h3>🎁 新生限定禮包</h3><p>歡迎來到學習角落！點擊領取 <b>35 XP</b>，每人只能領一次。</p><button type="button" data-starter-gift>立即領取 35 XP ✨</button></div>':''}
+function bindStarterGift(){document.querySelectorAll('[data-starter-gift]').forEach(b=>b.onclick=async()=>{b.disabled=true;await claimStarterGift()})}
 function renderPet(){
   if(!activeUid()){$('#content').innerHTML='<div class="empty">請先選擇學生</div>';return}
   const p={...defaultPet(),...(petData||{})},n=stageCount(p),xp=Number(p.xp||0),lower=milestone(n),upper=milestone(n+1),progress=Math.max(0,Math.min(100,100*(xp-lower)/(upper-lower))),size=Math.min(180,86+n*18);
@@ -998,6 +1028,7 @@ function renderPet(){
   <p>Lv. ${petLevel(p)} ・ ${xp} XP ・ ${n>=4?'成熟期':n>=1?'成長期':'幼年期'}</p>
   <div class="pet-bar"><div class="pet-fill" style="width:${progress}%"></div></div><p class="muted">距離下一次進化還需 ${Math.max(0,upper-xp)} XP · 進化後寵物會變大，並獲得抽獎機會</p>
   ${!isAdmin()?`<button id="editPet" class="secondary">✏️ 選擇 Emoji／幫寵物取名</button>`:''}</div>
+  ${starterGiftHTML()}
   <h3>🍱 餵食時間</h3><p class="muted">老師把作業狀態改為「已完成」後，這裡就會出現食物；每份作業可領 +10 XP 一次。</p>${ready.length?`<div class="pet-feed-list">${ready.map((w,i)=>`<div class="pet-feed-row"><span>${PET_FOODS[i%4]} ${esc(w.title||w.subject||'完成的作業')}</span>${isAdmin()?'<span class="muted">學生可自行餵食</span>':`<button data-feed="${esc(w.id)}" data-food="${PET_FOODS[i%4]}">餵食 ＋10 XP</button>`}</div>`).join('')}</div>`:'<div class="empty">🌷 目前沒有待領取的食物。老師確認作業完成後就會出現！</div>'}
   <section class="reward-card"><h3>🎁 進化驚喜禮物盒</h3><p class="muted">每次進化可以抽一次！選一個喜歡的禮物盒，立即揭曉驚喜獎品 ♡</p>
   <p class="pill">可抽獎次數：${remainingDraws(p)}</p>
@@ -1006,6 +1037,7 @@ function renderPet(){
   </section>
   <section class="reward-card"><h3>🎒 我的獎品背包</h3>${PRIZES.map((name,i)=>`<div class="bag-row"><span>${name}</span><b>可用 ${Math.max(0,(bag[PRIZE_KEYS[i]]||0)-(redeemed[PRIZE_KEYS[i]]||0))} 張</b>${isAdmin()?`<button class="secondary" data-redeem="${i}" ${bag[PRIZE_KEYS[i]]<=redeemed[PRIZE_KEYS[i]]?'disabled':''}>核銷 1 張</button>`:''}</div>`).join('')}<p class="muted">獎品可累積，兌換或使用作業減免券時由老師核銷。免費版抽獎在學生裝置進行，不能保證防竄改。</p></section>
   ${isAdmin()?`<section class="reward-card"><h3>🎲 抽獎機率設定</h3><p class="muted">免費前端抽獎，機率可調整，但無法保證防竄改。</p><div class="formgrid"><label>飲料券 %<input id="lotteryDrink" type="number" min="0" max="100" value="60"></label><label>現金券 %<input id="lotteryCash" type="number" min="0" max="100" value="10"></label><label>作業減免券 %<input id="lotteryHomework" type="number" min="0" max="100" value="30"></label></div><button id="saveLottery">儲存機率</button></section><section class="reward-card"><h3>🧑‍🏫 老師 XP 結算／獎懲</h3><p class="muted">每週檢查作業後，可視情況加分、扣分或免扣分；每次調整都有紀錄。請先在「作業管理」標記完成，學生才會拿到食物。</p><div class="formgrid"><label>XP 調整（可填負數）<input id="xpDelta" type="number" min="-100" max="100" value="5"></label><label>調整原因<input id="xpReason" maxlength="120" placeholder="例如：本週表現優秀" required></label></div><div class="actions"><button id="adjustXp">儲存 XP 調整</button><button class="secondary" id="waivePenalty">本週免扣 XP（留下紀錄）</button></div></section>`:''}`;
+  bindStarterGift();
   if(isAdmin()){loadLotteryWeights().then(w=>{['lotteryDrink','lotteryCash','lotteryHomework'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.value=Math.round(w[i]*100)})});$('#saveLottery')?.addEventListener('click',async()=>{const a=['lotteryDrink','lotteryCash','lotteryHomework'].map(id=>Number(document.getElementById(id).value));if(a.some(x=>!Number.isFinite(x)||x<0)||a.reduce((n,x)=>n+x,0)!==100){msg('三個機率必須合計 100%',true);return}try{await setDoc(doc(db,'settings','lottery'),{weights:a.map(x=>x/100),updatedAt:serverTimestamp(),teacherId:me.uid});msg('抽獎機率已更新')}catch(e){msg('儲存失敗：'+e.message,true)}})}
   $('#editPet')?.addEventListener('click',()=>{const dialog=document.createElement('div');dialog.className='pet-modal';dialog.innerHTML=`<div class="pet-dialog"><h3>🐾 自訂我的小夥伴</h3><div class="pet-choice-grid">${PET_CHOICES.map(e=>`<button class="pet-choice ${e===petAvatar(p)?'chosen':''}" data-emoji="${e}">${e}</button>`).join('')}</div><label>寵物名字<input id="petNewName" maxlength="12" value="${esc(p.name)}"></label><div class="actions"><button id="savePet">儲存寵物</button><button class="secondary" id="cancelPet">取消</button></div></div>`;document.body.append(dialog);let chosen=petAvatar(p);dialog.querySelectorAll('[data-emoji]').forEach(btn=>btn.onclick=()=>{chosen=btn.dataset.emoji;dialog.querySelectorAll('[data-emoji]').forEach(x=>x.classList.toggle('chosen',x===btn))});dialog.querySelector('#cancelPet').onclick=()=>dialog.remove();dialog.querySelector('#savePet').onclick=async()=>{const name=dialog.querySelector('#petNewName').value.trim();if(!name||name.length>12){msg('名字需為 1～12 字',true);return}try{const ref=doc(db,'pets',activeUid()),snap=await getDoc(ref);if(snap.exists())await updateDoc(ref,{name,emoji:chosen});else await setDoc(ref,{...defaultPet(),name,emoji:chosen});dialog.remove();await loadExtras();renderPet();msg('寵物外觀與名字已儲存！')}catch(e){msg('儲存失敗：'+e.message,true)}}});
   $('#content').querySelectorAll('[data-feed]').forEach(btn=>btn.onclick=async()=>{btn.disabled=true;const id=btn.dataset.feed,food=btn.dataset.food;let evolved=false;try{await runTransaction(db,async tx=>{const pr=doc(db,'pets',activeUid()),hr=doc(db,'homework',id),hw=await tx.get(hr),ps=await tx.get(pr);if(!hw.exists()||hw.data().studentId!==activeUid()||hw.data().status!=='done')throw Error('老師尚未確認這份作業');if(!ps.exists())throw Error('請先選擇 Emoji 寵物並儲存，再餵食喔！');const old={...defaultPet(),...ps.data()};if((old.fedIds||[]).includes(id))throw Error('已領取這份作業的食物');const next=old.xp+10,ev=evolutionFrom(next,old.evolutions);evolved=ev>old.evolutions;const data={xp:next,evolutions:ev,fedIds:[...old.fedIds,id]};if(ps.exists())tx.update(pr,data);else tx.set(pr,{...old,...data})});await loadExtras();renderPet();feedCelebration(food,evolved);xpCelebration(10,'作業完成獎勵');msg(evolved?'🎊 餵食成功！寵物進化，解鎖禮物抽獎！':'餵食成功！獲得 10 XP 💖')}catch(e){btn.disabled=false;msg('餵食失敗：'+e.message,true)}});
@@ -1469,21 +1501,25 @@ function renderHome(){
  const announcementBlock=`<section class="home-block"><div class="top"><h3>📢 老師公告</h3>${quick('announcements','查看全部 →')}</div>${notices.length?notices.map(a=>`<div class="home-list-row"><div><b>${a.pinned?'📌 ':''}${esc(a.title)}</b><p class="muted">${esc(a.body||'').slice(0,100)}</p></div>${!isAdmin()&&!(a.readBy||[]).includes(me.uid)?'<span class="pill">未讀</span>':''}</div>`).join(''):'<p class="muted">目前沒有公告 🌷</p>'}</section>`;
  const lesson=allLessons.filter(x=>x.date===date);
  if(isAdmin()){
-  const waiting=pendingWorks.length;
-  const notTaken=quizzes.filter(q=>q.released===true).reduce((n,q)=>n+(q.targetIds||[]).filter(id=>!quizResult(q,id)).length,0);
-  const outstanding=quizzes.filter(q=>q.released===true).flatMap(q=>(q.targetIds||[]).filter(id=>!quizResult(q,id)).map(id=>({q,id})));
-  const studentLabel=id=>students.find(x=>x.uid===id)?.name||'學生';
-  const attendanceToday=(cache.attendance||[]).filter(x=>x.date===date);
-  const attendanceMissing=students.filter(x=>!attendanceToday.some(a=>a.studentId===x.uid)).length;
-  const recentTeacherGrades=recentGrades.slice(0,4);
-  $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">👩‍🏫 老師工作台</span><h2>${subject?'今天是'+esc(subject)+'課':'今天沒有固定排課'} 🌷</h2><p class="muted">${esc(date)}・星期${weekday}｜整理學生的學習進度</p></div><span class="home-hero-emoji">📚</span></div>
-  <section class="home-block"><h3>📚 今天的課程與快速登記</h3><p class="muted">${subject?'今日科目：'+esc(subject):'今天沒有固定排課'}・可在課前或課後登記</p><div class="home-quick">${quick('progress','✏️ 登記今日進度')}${quick('attendance','📅 登記出席')}${quick('homework','📝 發布作業')}${quick('grades','📊 登記成績')}</div></section>
-  <section class="home-block"><div class="top"><h3>🔔 今日待辦</h3><span class="pill">${waiting+notTaken} 項</span></div>
-  ${waiting?`<div class="home-list-row"><b>📝 待確認作業：${waiting} 份</b>${quick('homework','處理 →')}</div>`:''}
-  ${outstanding.slice(0,6).map(({q,id})=>`<div class="home-list-row"><b>🧪 ${esc(studentLabel(id))}：${esc(q.title)}</b>${quick('quizzes','查看 →')}</div>`).join('')}
-  ${!waiting&&!notTaken?'<p class="muted">目前沒有待辦事項 🌷</p>':''}</section>
-  <section class="home-block"><div class="top"><h3>📋 今日已登記進度</h3>${quick('progress','查看進度 →')}</div>${lesson.length?lesson.map(x=>`<div class="home-list-row"><div><b>${esc(x.title||x.subject||'課程')}</b><p class="muted">${esc(x.detail||'')}</p></div></div>`).join(''):'<p class="muted">今天還沒有新增課程進度</p>'}</section>
-`;
+  const hw=teacherOverview.homework||[],grades=teacherOverview.grades||[],att=teacherOverview.attendance||[],prog=teacherOverview.progress||[];
+  const submitted=hw.filter(x=>x.submitted===true&&getStatus(x)!=='done');
+  const pending=hw.filter(x=>getStatus(x)!=='done');
+  const studentName=id=>allStudentProfiles.find(s=>s.uid===id)?.name||'學生';
+  const submittedByStudent=Object.groupBy?Object.groupBy(submitted,x=>x.studentId):{};
+  const cards=students.map(st=>{
+    const ownHw=hw.filter(x=>x.studentId===st.uid),ownSub=ownHw.filter(x=>x.submitted===true&&getStatus(x)!=='done');
+    const ownGrades=grades.filter(x=>x.studentId===st.uid).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    const ownProgress=prog.filter(x=>x.studentId===st.uid).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    const ownAtt=att.filter(x=>x.studentId===st.uid&&x.status==='present').length;
+    return `<div class="teacher-student-card"><h4>${esc(st.name||'學生')} ${ownSub.length?`<span class="teacher-alert">${ownSub.length}</span>`:''}</h4><p>${esc(studentSubjects(st).join('／'))}</p><p>📝 待批改 ${ownSub.length}・未完成 ${ownHw.filter(x=>getStatus(x)!=='done').length}</p><p>📊 最近成績 ${ownGrades[0]?esc(ownGrades[0].score)+' 分':'尚無'}・出席 ${ownAtt} 次</p><p>📚 最近進度 ${ownProgress[0]?esc(ownProgress[0].title||ownProgress[0].subject||'已登記'):'尚無'}</p><button class="secondary" data-select-student="${esc(st.uid)}">查看這位學生 →</button></div>`;
+  }).join('');
+  $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">👩‍🏫 全班工作台</span><h2>學生學習總覽</h2><p class="muted">${esc(date)}・星期${weekday}｜所有學生的重要資訊</p></div><span class="home-hero-emoji">📚</span></div>
+  <div class="home-stats"><div><b>${students.length}</b><small>使用中學生</small></div><div><b>${submitted.length}</b><small>學生提交待批改</small></div><div><b>${pending.length}</b><small>尚未完成作業</small></div></div>
+  <section class="home-block"><div class="top"><h3>🔔 待批改作業 ${submitted.length?`<span class="teacher-alert inline">${submitted.length}</span>`:''}</h3>${quick('homework','前往批改 →')}</div>${submitted.length?submitted.slice(0,8).map(w=>`<div class="home-list-row"><div><b>${esc(studentName(w.studentId))}：${esc(w.title||'作業')}</b><p class="muted">${esc(w.subject||'')}・${getStatus(w)==='correct'?'已再次提交訂正':'學生已按完成，等待老師批改'}</p></div><button data-review-homework="${esc(w.id)}">批改 →</button></div>`).join(''):'<p class="muted">目前沒有學生提交待批改的作業 ✨</p>'}</section>
+  <section class="home-block"><div class="top"><h3>👥 全部學生</h3>${quick('students','學生管理 →')}</div><div class="teacher-overview">${cards||'<p class="muted">尚無學生</p>'}</div></section>
+  <section class="home-block"><h3>⚡ 快速登記</h3><div class="home-quick">${quick('progress','✏️ 課程進度')}${quick('attendance','📅 出席紀錄')}${quick('homework','📝 發布／批改作業')}${quick('grades','📊 登記考試成績')}</div></section>`;
+  $('#content').querySelectorAll('[data-select-student]').forEach(b=>b.onclick=async()=>{selected=b.dataset.selectStudent;$('#studentPicker').value=selected;await reload();tab='homework';render()});
+  $('#content').querySelectorAll('[data-review-homework]').forEach(b=>b.onclick=async()=>{const x=hw.find(w=>w.id===b.dataset.reviewHomework);if(!x)return;selected=x.studentId;$('#studentPicker').value=selected;await reload();tab='homework';render()});
  }else{
   const p={...defaultPet(),...(petData||{})},xp=Number(p.xp||0),n=stageCount(p),lower=milestone(n),upper=milestone(n+1),percent=Math.min(100,Math.max(0,100*(xp-lower)/(upper-lower)));
   const recent=recentGrades[0];
@@ -1495,6 +1531,7 @@ function renderHome(){
   const feedReady=allWorks.filter(w=>getStatus(w)==='done'&&!(p.fedIds||[]).includes(w.id)).length;
   const dot=(count,label)=>count>0?`<span class="todo-dot" data-count="${count>99?'large':'normal'}" aria-label="${label}：${count} 項" title="${label}：${count} 項">${count>99?'99+':count}</span>`:'';
   $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">🌼 每天進步一點點</span><h2>今天也一起加油吧！</h2><p class="muted">${esc(date)}・星期${weekday}${subject&&subjectAllowed(subject)?'｜今天是'+esc(subject)+'課':''}</p></div><span class="home-hero-emoji">${petAvatar(p)}</span><div class="home-petbar"><div class="top"><b>${esc(p.name||'我的寵物')}・Lv. ${petLevel(p)}</b><span>${xp} XP</span></div><div class="home-track"><div style="width:${percent}%"></div></div><small>距離下一次進化還需 ${Math.max(0,upper-xp)} XP</small></div></div>
+  ${starterGiftHTML()}
   <div class="home-stats"><div><b>${pendingWorks.length}</b><small>待完成作業</small></div><div><b>${pendingQuizzes.length}</b><small>待完成測驗</small></div><div><b>${recent?esc(recent.score):'—'}</b><small>最近考試</small></div></div>
   <div class="student-shortcuts">
     <button data-home-tab="quizzes">${dot(pendingQuizzes.length,'有未做測驗')}🧪 開始預習 <small>${pendingQuizzes.length} 份待完成</small></button>
@@ -1512,6 +1549,7 @@ function renderHome(){
   <section class="home-block"><div class="top"><h3>📈 最近學習成果</h3>${quick('grades','查看成績 →')}</div>${recent?`<div class="home-list-row"><div><b>${esc(recent.title||'最近考試')}</b><p class="muted">${esc(recent.date||'')}・${esc(recent.subject||'')}</p></div><strong class="home-score">${esc(recent.score)} / 100</strong></div>`:'<p class="muted">還沒有考試紀錄</p>'}</section>
   <section class="home-block"><div class="top"><h3>💌 今日心情</h3>${quick('diary','寫下今天的心情 →')}</div><p class="muted">今天學會了什麼？來留下一點小紀錄吧！ 🌸</p></section>`;
  }
+ bindStarterGift();
  $('#content').querySelectorAll('[data-home-tab]').forEach(btn=>btn.onclick=()=>{tab=btn.dataset.homeTab;render()});
  $('#content').querySelectorAll('[data-home-quiz]').forEach(btn=>btn.onclick=()=>{tab='quizzes';render();const q=quizzes.find(x=>x.id===btn.dataset.homeQuiz);if(q)showQuizTake(q)});
 }
@@ -1616,7 +1654,7 @@ function renderHomework(){
         try{
           await updateDoc(doc(db,"homework",x.id),{
             status:s.value,
-            done:s.value==="done"
+            done:s.value==="done",submitted:false
           });
           msg(s.value==="done"?"已確認完成！學生現在可以到寵物小屋餵食，領取 +10 XP。":s.value==="correct"?"已標記需訂正，暫時不能餵食。":"已更新作業狀態，尚未開放餵食。");
           await reload();
@@ -1629,6 +1667,16 @@ function renderHomework(){
     });
   }
 
+  if(!isAdmin()){
+    $('#homeworkList').querySelectorAll('[data-submit-homework]').forEach(btn=>btn.onclick=async()=>{
+      const work=works.find(w=>w.id===btn.dataset.submitHomework);
+      if(!work||work.submitted||getStatus(work)==='done')return;
+      if(!confirm('已經把實體作業交給老師了嗎？按確認會通知老師批改。'))return;
+      btn.disabled=true;
+      try{await updateDoc(doc(db,'homework',work.id),{submitted:true});msg('📨 已通知老師批改！');await reload();}
+      catch(e){btn.disabled=false;msg('通知老師失敗：'+e.message,true)}
+    });
+  }
   $("#homeworkFilter").onchange=e=>{
     homeworkFilter=e.target.value;
     renderHomework();
@@ -1689,7 +1737,8 @@ function homeworkRow(x,i){
         </div>
       `:`
         <div><span class="status ${status}">${x.done&&status==='unchecked'?'已送出，待老師確認':statusNames[status]}</span>
-        <p class="muted" style="margin-top:6px">${status==='done'?'老師已確認完成，可到寵物小屋餵食':status==='correct'?'請訂正後交給老師再次批改':'請將實體作業交給老師，批改完成後由老師更新狀態'}</p></div>
+        <p class="muted" style="margin-top:6px">${status==='done'?'老師已確認完成，可到寵物小屋餵食':x.submitted?'📨 已通知老師，等待批改':status==='correct'?'請訂正後交給老師再次批改':'請將實體作業交給老師'}</p>
+        ${status!=='done'&&!x.submitted?`<button type="button" data-submit-homework="${esc(x.id)}">${status==='correct'?'訂正完成，通知老師':'已交實體作業，通知老師'}</button>`:''}</div>
       `}
     </div>
   `;
@@ -1788,7 +1837,8 @@ function editHomework(existing=null,defaults={}){
       detail:String(f.get("detail")).trim(),
       advice:String(f.get("advice")).trim(),
       status,
-      done:status==="done"
+      done:status==="done",
+      submitted:existing?(status===getStatus(existing)?!!existing.submitted:false):false
     };
 
     const btn=e.target.querySelector('[type="submit"]');
@@ -2363,7 +2413,7 @@ function renderStudentManagement(){
       const result=await createUserWithEmailAndPassword(studentCreationAuth,email,password);
       createdUid=result.user.uid;
       await setDoc(doc(db,"users",createdUid),{
-        name,username,role:"student",active:true,subjects
+        name,username,role:"student",active:true,subjects,starterGift:35
       });
       await signOut(studentCreationAuth);
       await loadStudents();
