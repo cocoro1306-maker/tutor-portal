@@ -295,6 +295,15 @@ input[type=checkbox]{accent-color:#db8d8d}
 .student-shortcuts .todo-dot[data-count="large"]{font-size:12px!important}
 .student-shortcuts button:focus-visible{outline:3px solid #df7993;outline-offset:2px}
 .teacher-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:10px;margin:12px 0}.teacher-student-card{border:1px solid #f0d9d9;border-radius:14px;background:#fff8f5;padding:13px}.teacher-student-card h4{margin:0 0 9px}.teacher-student-card p{margin:6px 0;color:#876b70;font-size:13px}.teacher-alert{display:inline-flex;align-items:center;justify-content:center;background:#ed1c34;color:white;border-radius:999px;min-width:25px;height:25px;padding:0 6px;font-weight:800;font-size:13px;box-shadow:0 2px 5px #b24d5b55}.teacher-alert.inline{vertical-align:middle;margin-left:6px}.gift-card{background:linear-gradient(125deg,#fff0c9,#ffe6ee);border:2px solid #f3cba9;border-radius:16px;padding:18px;margin:14px 0}.gift-card h3{margin:0 0 8px}.gift-card button{background:#e4769d}
+
+/* 寵物 XP 明細：學生與老師共用 */
+.xp-history-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.xp-history-table{width:100%;min-width:480px;border-collapse:collapse;font-size:14px;text-align:left}
+.xp-history-table th,.xp-history-table td{padding:11px 12px;border-bottom:1px solid #eedee3}
+.xp-history-table th{background:#fff0f5;color:#87576a}
+.xp-history-table tbody tr:nth-child(even){background:#fffafb}
+.xp-history-positive{color:#278c63;font-weight:700;white-space:nowrap}
+.xp-history-negative{color:#bb4960;font-weight:700;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -1017,6 +1026,40 @@ async function claimStarterGift(){
 }
 function starterGiftHTML(){return !isAdmin()&&profile?.starterGift===35&&!petData?.starterGiftClaimed?'<div class="gift-card"><h3>🎁 新生限定禮包</h3><p>歡迎來到學習角落！點擊領取 <b>35 XP</b>，每人只能領一次。</p><button type="button" data-starter-gift>立即領取 35 XP ✨</button></div>':''}
 function bindStarterGift(){document.querySelectorAll('[data-starter-gift]').forEach(b=>b.onclick=async()=>{b.disabled=true;await claimStarterGift()})}
+
+function xpHistoryDate(value){
+  if(!value)return '—';
+  const date=typeof value.toDate==='function'?value.toDate():new Date(value);
+  return Number.isNaN(date.getTime())?'—':date.toLocaleDateString('zh-TW',{year:'numeric',month:'2-digit',day:'2-digit'});
+}
+async function loadXpHistory(studentId){
+  const mount=document.getElementById('xpHistoryRecords');
+  if(!mount||!studentId)return;
+  try{
+    const events=await getDocs(query(collection(db,'petEvents'),where('studentId','==',studentId)));
+    const entries=[];
+    events.forEach(d=>{
+      const x=d.data();
+      if(x.type!=='reward'&&x.type!=='adjust')return;
+      entries.push({key:'event_'+d.id,when:x.createdAt,reason:x.reason||(x.type==='adjust'?'老師調整經驗':'學習獎勵'),delta:Number(x.delta||0),type:x.type==='adjust'?'老師調整':x.sourceKind==='grades'?'考試成績':x.sourceKind==='attendance'?'課堂出席':'學習獎勵'});
+    });
+    // 餵食和線上測驗的 XP 在既有版本只記錄於寵物文件，從已領取 ID 回推。
+    const petSnap=await getDoc(doc(db,'pets',studentId));
+    const pet=petSnap.exists()?petSnap.data():{};
+    const fed=new Set(pet.fedIds||[]);
+    const workDocs=await getDocs(query(collection(db,'homework'),where('studentId','==',studentId)));
+    workDocs.forEach(d=>{if(fed.has(d.id)){const x=d.data();entries.push({key:'feed_'+d.id,when:null,reason:x.title||x.subject||'完成作業並餵食',delta:10,type:'作業餵食'});fed.delete(d.id)}});
+    fed.forEach(id=>entries.push({key:'feed_'+id,when:null,reason:'已完成作業（原作業紀錄已不存在）',delta:10,type:'作業餵食'}));
+    const rewarded=new Set(pet.quizRewardIds||[]);
+    for(const id of [...rewarded]){try{const q=await getDoc(doc(db,'quizzes',id));if(q.exists()){entries.push({key:'quiz_'+id,when:null,reason:q.data().title||'線上測驗全對',delta:3,type:'測驗滿分'});rewarded.delete(id)}}catch(e){/* 舊測驗可能已取消發布，仍保留 XP 紀錄 */}}
+    rewarded.forEach(id=>entries.push({key:'quiz_'+id,when:null,reason:'線上測驗全對（原測驗紀錄已不存在）',delta:3,type:'測驗滿分'}));
+    if(pet.starterGiftClaimed===true)entries.push({key:'starter',when:null,reason:'新生限定禮包',delta:35,type:'新手禮包'});
+    entries.sort((a,b)=>(b.when?.seconds||0)-(a.when?.seconds||0));
+    const current=document.getElementById('xpHistoryRecords');
+    if(!current)return;
+    current.innerHTML=entries.length?`<div class="xp-history-wrap"><table class="xp-history-table"><thead><tr><th>日期</th><th>獎勵來源</th><th>原因／項目</th><th>經驗變動</th></tr></thead><tbody>${entries.map(x=>`<tr><td>${xpHistoryDate(x.when)}</td><td>${esc(x.type)}</td><td>${esc(x.reason)}</td><td class="${x.delta>=0?'xp-history-positive':'xp-history-negative'}">${x.delta>0?'+':''}${x.delta} XP</td></tr>`).join('')}</tbody></table></div><p class="muted" style="font-size:12px">※ 舊版餵食、測驗和新手禮包沒有獨立保存領取時間，因此日期顯示「—」。此表不會再次發放 XP。</p>`:'<div class="empty">目前還沒有 XP 獎勵紀錄</div>';
+  }catch(e){const current=document.getElementById('xpHistoryRecords');if(current)current.innerHTML=`<p class="muted">讀取紀錄失敗：${esc(e.message)}</p>`;console.warn('XP history',e)}
+}
 function renderPet(){
   if(!activeUid()){$('#content').innerHTML='<div class="empty">請先選擇學生</div>';return}
   const p={...defaultPet(),...(petData||{})},n=stageCount(p),xp=Number(p.xp||0),lower=milestone(n),upper=milestone(n+1),progress=Math.max(0,Math.min(100,100*(xp-lower)/(upper-lower))),size=Math.min(180,86+n*18);
@@ -1036,8 +1079,10 @@ function renderPet(){
   <p class="muted">${remainingDraws(p)>0?'恭喜進化！點擊禮物盒就能立即開獎！':'下次進化就有新的抽獎機會。'}</p>
   </section>
   <section class="reward-card"><h3>🎒 我的獎品背包</h3>${PRIZES.map((name,i)=>`<div class="bag-row"><span>${name}</span><b>可用 ${Math.max(0,(bag[PRIZE_KEYS[i]]||0)-(redeemed[PRIZE_KEYS[i]]||0))} 張</b>${isAdmin()?`<button class="secondary" data-redeem="${i}" ${bag[PRIZE_KEYS[i]]<=redeemed[PRIZE_KEYS[i]]?'disabled':''}>核銷 1 張</button>`:''}</div>`).join('')}<p class="muted">獎品可累積，兌換或使用作業減免券時由老師核銷。免費版抽獎在學生裝置進行，不能保證防竄改。</p></section>
+  <section class="reward-card"><h3>📒 經驗值獲得紀錄</h3><p class="muted">記錄每次獲得或調整 XP 的原因，方便學生回顧、老師核對。</p><div id="xpHistoryRecords"><p class="muted">正在載入經驗紀錄…</p></div></section>
   ${isAdmin()?`<section class="reward-card"><h3>🎲 抽獎機率設定</h3><p class="muted">免費前端抽獎，機率可調整，但無法保證防竄改。</p><div class="formgrid"><label>飲料券 %<input id="lotteryDrink" type="number" min="0" max="100" value="60"></label><label>現金券 %<input id="lotteryCash" type="number" min="0" max="100" value="10"></label><label>作業減免券 %<input id="lotteryHomework" type="number" min="0" max="100" value="30"></label></div><button id="saveLottery">儲存機率</button></section><section class="reward-card"><h3>🧑‍🏫 老師 XP 結算／獎懲</h3><p class="muted">每週檢查作業後，可視情況加分、扣分或免扣分；每次調整都有紀錄。請先在「作業管理」標記完成，學生才會拿到食物。</p><div class="formgrid"><label>XP 調整（可填負數）<input id="xpDelta" type="number" min="-100" max="100" value="5"></label><label>調整原因<input id="xpReason" maxlength="120" placeholder="例如：本週表現優秀" required></label></div><div class="actions"><button id="adjustXp">儲存 XP 調整</button><button class="secondary" id="waivePenalty">本週免扣 XP（留下紀錄）</button></div></section>`:''}`;
   bindStarterGift();
+  loadXpHistory(activeUid());
   if(isAdmin()){loadLotteryWeights().then(w=>{['lotteryDrink','lotteryCash','lotteryHomework'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.value=Math.round(w[i]*100)})});$('#saveLottery')?.addEventListener('click',async()=>{const a=['lotteryDrink','lotteryCash','lotteryHomework'].map(id=>Number(document.getElementById(id).value));if(a.some(x=>!Number.isFinite(x)||x<0)||a.reduce((n,x)=>n+x,0)!==100){msg('三個機率必須合計 100%',true);return}try{await setDoc(doc(db,'settings','lottery'),{weights:a.map(x=>x/100),updatedAt:serverTimestamp(),teacherId:me.uid});msg('抽獎機率已更新')}catch(e){msg('儲存失敗：'+e.message,true)}})}
   $('#editPet')?.addEventListener('click',()=>{const dialog=document.createElement('div');dialog.className='pet-modal';dialog.innerHTML=`<div class="pet-dialog"><h3>🐾 自訂我的小夥伴</h3><div class="pet-choice-grid">${PET_CHOICES.map(e=>`<button class="pet-choice ${e===petAvatar(p)?'chosen':''}" data-emoji="${e}">${e}</button>`).join('')}</div><label>寵物名字<input id="petNewName" maxlength="12" value="${esc(p.name)}"></label><div class="actions"><button id="savePet">儲存寵物</button><button class="secondary" id="cancelPet">取消</button></div></div>`;document.body.append(dialog);let chosen=petAvatar(p);dialog.querySelectorAll('[data-emoji]').forEach(btn=>btn.onclick=()=>{chosen=btn.dataset.emoji;dialog.querySelectorAll('[data-emoji]').forEach(x=>x.classList.toggle('chosen',x===btn))});dialog.querySelector('#cancelPet').onclick=()=>dialog.remove();dialog.querySelector('#savePet').onclick=async()=>{const name=dialog.querySelector('#petNewName').value.trim();if(!name||name.length>12){msg('名字需為 1～12 字',true);return}try{const ref=doc(db,'pets',activeUid()),snap=await getDoc(ref);if(snap.exists())await updateDoc(ref,{name,emoji:chosen});else await setDoc(ref,{...defaultPet(),name,emoji:chosen});dialog.remove();await loadExtras();renderPet();msg('寵物外觀與名字已儲存！')}catch(e){msg('儲存失敗：'+e.message,true)}}});
   $('#content').querySelectorAll('[data-feed]').forEach(btn=>btn.onclick=async()=>{btn.disabled=true;const id=btn.dataset.feed,food=btn.dataset.food;let evolved=false;try{await runTransaction(db,async tx=>{const pr=doc(db,'pets',activeUid()),hr=doc(db,'homework',id),hw=await tx.get(hr),ps=await tx.get(pr);if(!hw.exists()||hw.data().studentId!==activeUid()||hw.data().status!=='done')throw Error('老師尚未確認這份作業');if(!ps.exists())throw Error('請先選擇 Emoji 寵物並儲存，再餵食喔！');const old={...defaultPet(),...ps.data()};if((old.fedIds||[]).includes(id))throw Error('已領取這份作業的食物');const next=old.xp+10,ev=evolutionFrom(next,old.evolutions);evolved=ev>old.evolutions;const data={xp:next,evolutions:ev,fedIds:[...old.fedIds,id]};if(ps.exists())tx.update(pr,data);else tx.set(pr,{...old,...data})});await loadExtras();renderPet();feedCelebration(food,evolved);xpCelebration(10,'作業完成獎勵');msg(evolved?'🎊 餵食成功！寵物進化，解鎖禮物抽獎！':'餵食成功！獲得 10 XP 💖')}catch(e){btn.disabled=false;msg('餵食失敗：'+e.message,true)}});
