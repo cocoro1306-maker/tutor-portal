@@ -571,7 +571,8 @@ function curriculumSelectorHTML(existing={}){
 
   return `
     <div class="curriculum-box full">
-      <h3>📚 選擇科目與章節</h3>
+      <h3>📚 選擇科目與章節 <small style="font-size:12px;color:#9b5875">新版｜章節可複選</small></h3>
+      <p class="muted" style="margin:3px 0 12px">直接勾選今天教過的所有章節與小節，不必逐筆新增。</p>
 
       <div class="formgrid">
         <label>
@@ -592,21 +593,21 @@ function curriculumSelectorHTML(existing={}){
         </label>
 
         <div class="full">
-          <strong>章節（可複選）</strong>
+          <strong>① 選擇章節（可同時勾選多章）</strong>
           <div id="currChapter" class="section-list" style="margin-top:8px"></div>
         </div>
       </div>
 
       <div style="margin-top:14px">
         <div class="top">
-          <strong>小節（可複選）</strong>
+          <strong>② 選擇小節（可同時勾選多節）</strong>
           <button type="button" class="secondary"
             id="selectAllSections">
             全選／取消全選
           </button>
         </div>
         <div id="currSections" class="section-list"></div>
-        <label class="section-check"><input type="checkbox" id="currOtherToggle"> 其他／自行輸入小節</label>
+        <label class="section-check" style="margin-top:12px;border:2px dashed #d59bb1;background:#fff7fa"><input type="checkbox" id="currOtherToggle"> ✏️ 其他／自己輸入補充進度</label>
         <input id="currOtherText" placeholder="例如：段考複習、補充應用題" maxlength="100" style="display:none;margin-top:8px">
       </div>
     </div>
@@ -647,6 +648,7 @@ function setupCurriculumSelector(existing={}){
   $("#currOtherText").oninput=autoFillTitle;
   $("#selectAllSections").onclick=()=>{const boxes=[...sectionsEl.querySelectorAll('input[type=checkbox]')];const check=boxes.some(x=>!x.checked);boxes.forEach(x=>x.checked=check);autoFillTitle();};
   fillSemesters(existing.semester||'',oldChapters,oldSections);
+  if(!oldChapters.length && chapterEl.querySelectorAll("input").length===0){chapterEl.innerHTML="<p class=muted>目前沒有預設章節，可使用下方「其他」自行填寫進度。</p>";}
 }
 function selectedCurriculum(){
   const chapters=[...document.querySelectorAll('#currChapter input[name="chapters"]:checked')].map(x=>x.value);
