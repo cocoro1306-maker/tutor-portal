@@ -273,6 +273,13 @@ input[type=checkbox]{accent-color:#db8d8d}
 @keyframes xp-float{to{transform:translateY(-65vh) rotate(180deg);opacity:0}}
 .teacher-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:640px){.teacher-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 學生優先：卡片明確、表單減少擁擠 */
+.section-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.section-check{display:flex!important;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e3e8f0;border-radius:12px;padding:10px 12px;cursor:pointer}
+.section-check input{flex:0 0 auto}
+.student-check{min-height:42px}
+.home-list-row{border-radius:12px}
+@media(max-width:700px){.formgrid{grid-template-columns:1fr}.panel{padding:14px}.section-check{width:100%}.home-quick button,.student-shortcuts button{min-height:48px}}
 </style>
 </head>
 <body>
@@ -350,7 +357,6 @@ import {
   getDocs,addDoc,updateDoc,deleteDoc,serverTimestamp,setDoc,runTransaction,arrayUnion
 } from
 "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import {getFunctions,httpsCallable} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js";
 
 const firebaseApp=initializeApp(firebaseConfig);
 const auth=getAuth(firebaseApp);
@@ -358,8 +364,6 @@ const auth=getAuth(firebaseApp);
 const studentCreationApp=initializeApp(firebaseConfig,"student-creation");
 const studentCreationAuth=getAuth(studentCreationApp);
 const db=getFirestore(firebaseApp);
-const functions=getFunctions(firebaseApp,"asia-east1");
-const deleteStudentAccount=httpsCallable(functions,"deleteStudentAccount");
 // Spark 免費方案：學生端獨立抽獎，不使用 Cloud Functions
 const $=s=>document.querySelector(s);
 
@@ -453,6 +457,19 @@ function isAdmin(){
   return profile?.role==="teacher";
 }
 
+const SUBJECT_OPTIONS=["數學","理化","生物","其他"];
+function studentSubjects(st){return Array.isArray(st?.subjects)?st.subjects:[];}
+function subjectAllowed(subject,st=profile){
+  if(isAdmin()||!subject)return true;
+  const list=studentSubjects(st);
+  return !list.length||list.includes(subject); // 舊帳號未設定科目，保留原本顯示方式
+}
+function studentsForSubject(subject){
+  return students.filter(st=>!subject||!studentSubjects(st).length||studentSubjects(st).includes(subject));
+}
+function studentSubjectBadges(st){
+  return studentSubjects(st).length?studentSubjects(st).map(x=>`<span class="pill">${esc(x)}</span>`).join(' '):'<span class="muted">尚未設定（沿用原本顯示）</span>';
+}
 function activeUid(){
   return isAdmin()?selected:me?.uid;
 }
@@ -535,7 +552,7 @@ async function reload(){
       "progress","homework","grades",
       "materials","mistakes","attendance"
     ]){
-      cache[kind]=await load(kind);
+      cache[kind]=(await load(kind)).filter(x=>subjectAllowed(x.subject));
     }
 
     await loadExtras();
@@ -574,10 +591,10 @@ function curriculumSelectorHTML(existing={}){
           <select id="currSemester" name="semester"></select>
         </label>
 
-        <label class="full">
-          章節
-          <select id="currChapter" name="chapter"></select>
-        </label>
+        <div class="full">
+          <strong>章節（可複選）</strong>
+          <div id="currChapter" class="section-list" style="margin-top:8px"></div>
+        </div>
       </div>
 
       <div style="margin-top:14px">
@@ -589,114 +606,54 @@ function curriculumSelectorHTML(existing={}){
           </button>
         </div>
         <div id="currSections" class="section-list"></div>
+        <label class="section-check"><input type="checkbox" id="currOtherToggle"> 其他／自行輸入小節</label>
+        <input id="currOtherText" placeholder="例如：段考複習、補充應用題" maxlength="100" style="display:none;margin-top:8px">
       </div>
     </div>
   `;
 }
 
 function setupCurriculumSelector(existing={}){
-  const subjectEl=$("#currSubject");
-  const semesterEl=$("#currSemester");
-  const chapterEl=$("#currChapter");
-  const sectionsEl=$("#currSections");
-
+  const subjectEl=$("#currSubject"),semesterEl=$("#currSemester"),chapterEl=$("#currChapter"),sectionsEl=$("#currSections");
   if(!subjectEl)return;
-
-  const initialSections=Array.isArray(existing.sections)
-    ?existing.sections:[];
-
-  function fillSections(selectedSections=[]){
-    const sections=getSections(
-      subjectEl.value,
-      semesterEl.value,
-      chapterEl.value
-    );
-
-    sectionsEl.innerHTML=sections.length
-      ?sections.map(s=>`
-        <label class="section-check">
-          <input type="checkbox" name="sections"
-            value="${esc(s)}"
-            ${selectedSections.includes(s)?"checked":""}>
-          <span>${esc(s)}</span>
-        </label>
-      `).join("")
-      :'<p class="muted">此科目尚無小節，可自行輸入名稱。</p>';
-  }
-
-  function fillChapters(preferred="",sections=[]){
-    const chapters=getChapters(
-      subjectEl.value,semesterEl.value
-    );
-
-    chapterEl.innerHTML=chapters.map(c=>`
-      <option value="${esc(c)}">${esc(c)}</option>
-    `).join("");
-
-    if(chapters.includes(preferred)){
-      chapterEl.value=preferred;
-    }
-
-    fillSections(sections);
-  }
-
-  function fillSemesters(preferred="",chapter="",sections=[]){
-    const semesters=getSemesters(subjectEl.value);
-
-    semesterEl.innerHTML=semesters.map(s=>`
-      <option value="${esc(s)}">${esc(s)}</option>
-    `).join("");
-
-    if(semesters.includes(preferred)){
-      semesterEl.value=preferred;
-    }
-
-    fillChapters(chapter,sections);
-  }
-
-  subjectEl.onchange=()=>{
-    fillSemesters();
-    autoFillTitle();
+  const oldChapters=Array.isArray(existing.chapters)?existing.chapters:(existing.chapter?String(existing.chapter).split('、'):[]);
+  const oldSections=Array.isArray(existing.sections)?existing.sections:[];
+  const knownSections=new Set();
+  const fillSections=(selected=[])=>{
+    const chapters=[...chapterEl.querySelectorAll('input:checked')].map(x=>x.value);
+    const sections=[...new Set(chapters.flatMap(ch=>getSections(subjectEl.value,semesterEl.value,ch)))];
+    knownSections.clear();sections.forEach(x=>knownSections.add(x));
+    sectionsEl.innerHTML=sections.length?sections.map(x=>`<label class="section-check"><input type="checkbox" name="sections" value="${esc(x)}" ${selected.includes(x)?'checked':''}><span>${esc(x)}</span></label>`).join(''):'<p class="muted">可在「其他」輸入自己的小節。</p>';
+    const other=selected.filter(x=>!knownSections.has(x));
+    $("#currOtherToggle").checked=other.length>0;
+    $("#currOtherText").value=other.join('、');
+    $("#currOtherText").style.display=other.length?'block':'none';
   };
-
-  semesterEl.onchange=()=>{
-    fillChapters();
-    autoFillTitle();
+  const fillChapters=(selected=[],selSections=[])=>{
+    const choices=getChapters(subjectEl.value,semesterEl.value);
+    chapterEl.innerHTML=choices.map(x=>`<label class="section-check"><input type="checkbox" name="chapters" value="${esc(x)}" ${selected.includes(x)?'checked':''}><span>${esc(x)}</span></label>`).join('');
+    fillSections(selSections);
   };
-
-  chapterEl.onchange=()=>{
-    fillSections();
-    autoFillTitle();
+  const fillSemesters=(semester='',chs=[],secs=[])=>{
+    const choices=getSemesters(subjectEl.value);
+    semesterEl.innerHTML=choices.map(x=>`<option value="${esc(x)}" ${x===semester?'selected':''}>${esc(x)}</option>`).join('');
+    fillChapters(chs,secs);
   };
-
+  subjectEl.onchange=()=>{fillSemesters();autoFillTitle();};
+  semesterEl.onchange=()=>{fillChapters();autoFillTitle();};
+  chapterEl.onchange=()=>{fillSections([...sectionsEl.querySelectorAll('input:checked')].map(x=>x.value));autoFillTitle();};
   sectionsEl.onchange=autoFillTitle;
-
-  $("#selectAllSections").onclick=()=>{
-    const boxes=[...sectionsEl.querySelectorAll(
-      'input[type="checkbox"]'
-    )];
-
-    const check=boxes.some(x=>!x.checked);
-    boxes.forEach(x=>x.checked=check);
-    autoFillTitle();
-  };
-
-  fillSemesters(
-    existing.semester||"",
-    existing.chapter||"",
-    initialSections
-  );
+  $("#currOtherToggle").onchange=e=>{$("#currOtherText").style.display=e.target.checked?'block':'none';autoFillTitle();};
+  $("#currOtherText").oninput=autoFillTitle;
+  $("#selectAllSections").onclick=()=>{const boxes=[...sectionsEl.querySelectorAll('input[type=checkbox]')];const check=boxes.some(x=>!x.checked);boxes.forEach(x=>x.checked=check);autoFillTitle();};
+  fillSemesters(existing.semester||'',oldChapters,oldSections);
 }
-
 function selectedCurriculum(){
-  return {
-    subject:$("#currSubject")?.value||"其他",
-    semester:$("#currSemester")?.value||"",
-    chapter:$("#currChapter")?.value||"",
-    sections:[...document.querySelectorAll(
-      '#currSections input[name="sections"]:checked'
-    )].map(x=>x.value)
-  };
+  const chapters=[...document.querySelectorAll('#currChapter input[name="chapters"]:checked')].map(x=>x.value);
+  const sections=[...document.querySelectorAll('#currSections input[name="sections"]:checked')].map(x=>x.value);
+  const other=$("#currOtherToggle")?.checked?$("#currOtherText")?.value.trim():'';
+  if(other)sections.push(other);
+  return {subject:$("#currSubject")?.value||'其他',semester:$("#currSemester")?.value||'',chapter:chapters.join('、'),chapters,sections};
 }
 
 function curriculumTitle(data){
@@ -724,7 +681,7 @@ function bindTitleTracking(existing){
 function curriculumDisplay(x){
   const parts=[
     x.semester,
-    x.chapter,
+    ...(Array.isArray(x.chapters)?x.chapters:[x.chapter]),
     ...(Array.isArray(x.sections)?x.sections:[])
   ].filter(Boolean);
 
@@ -1120,7 +1077,7 @@ async function loadQuizzes(){
   if(!me)return;
   const q=isAdmin()?collection(db,'quizzes'):query(collection(db,'quizzes'),where('targetIds','array-contains',me.uid),where('released','==',true));
   const snap=await getDocs(q);
-  quizzes=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+  quizzes=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>subjectAllowed(x.subject)).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
   const submissions=await getDocs(isAdmin()?collection(db,'quizSubmissions'):query(collection(db,'quizSubmissions'),where('studentId','==',me.uid)));
   quizSubmissions=submissions.docs.map(d=>({id:d.id,...d.data()}));
 }
@@ -1410,7 +1367,7 @@ async function loadAnnouncements(){
   const q=isAdmin()?collection(db,"announcements"):
     query(collection(db,"announcements"),where("targetIds","array-contains",me.uid));
   const snap=await getDocs(q);
-  announcements=snap.docs.map(d=>({id:d.id,...d.data()}));
+  announcements=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>subjectAllowed(x.subject));
 }
 function renderAnnouncements(){
   const items=visibleAnnouncements();
@@ -1450,23 +1407,28 @@ function editAnnouncement(existing=null){
   const host=$("#announcementEditor");
   host.innerHTML=`<section class="curriculum-box"><h3>${existing?'編輯':'新增'}公告</h3>
     <form id="noticeForm" class="formgrid">
+      <label>公告科目<select name="subject"><option value="">全體公告</option>${SUBJECT_OPTIONS.map(x=>`<option value="${esc(x)}" ${existing?.subject===x?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
       <label>公告分類<select name="category">${['一般公告','考前複習','調課通知','作業提醒','其他'].map(v=>`<option ${existing?.category===v?'selected':''}>${v}</option>`).join('')}</select></label>
       <label>到期日期（可留空）<input type="date" name="expiresAt" value="${esc(existing?.expiresAt||'')}"></label>
       <label class="full">公告標題<input name="title" maxlength="100" required value="${esc(existing?.title||'')}"></label>
       <label class="full">公告內容<textarea name="body" maxlength="3000" required>${esc(existing?.body||'')}</textarea></label>
       <label class="full"><input type="checkbox" name="pinned" ${existing?.pinned?'checked':''}> 📌 置頂公告</label>
-      <div class="full"><div class="top"><strong>發送對象</strong><button type="button" class="secondary" id="noticeSelectAll">全選／取消全選</button></div>
+      <div class="full"><p class="muted">選擇公告科目後，自動勾選有上該科的學生；也可手動調整。</p><div class="top"><strong>發送對象</strong><button type="button" class="secondary" id="noticeSelectAll">全選／取消全選</button></div>
       <div class="student-list" id="noticeTargets">${students.map(st=>`<label class="student-check"><input type="checkbox" value="${esc(st.uid)}" ${existing?(existing.targetIds||[]).includes(st.uid)?'checked':'':'checked'}>${esc(st.name||st.uid)}</label>`).join('')}</div></div>
       <div class="actions full"><button type="submit">${existing?'儲存修改':'發布公告'}</button><button type="button" class="secondary" id="noticeCancel">取消</button></div>
     </form></section>`;
   host.scrollIntoView({behavior:'smooth',block:'start'});
   $("#noticeCancel").onclick=()=>host.innerHTML='';
+  host.querySelector('[name="subject"]').onchange=e=>{
+    const allowed=new Set(studentsForSubject(e.target.value).map(x=>x.uid));
+    host.querySelectorAll('#noticeTargets input').forEach(box=>{box.checked=allowed.has(box.value);});
+  };
   $("#noticeSelectAll").onclick=()=>{const boxes=[...host.querySelectorAll('#noticeTargets input')],check=boxes.some(b=>!b.checked);boxes.forEach(b=>b.checked=check);};
   $("#noticeForm").onsubmit=async e=>{
     e.preventDefault();const f=new FormData(e.target);
     const targetIds=[...host.querySelectorAll('#noticeTargets input:checked')].map(x=>x.value);
     if(!targetIds.length){msg('請至少選擇一位學生',true);return;}
-    const data={category:String(f.get('category')),title:String(f.get('title')).trim(),body:String(f.get('body')).trim(),expiresAt:String(f.get('expiresAt')||''),pinned:f.has('pinned'),targetIds};
+    const data={subject:String(f.get('subject')||''),category:String(f.get('category')),title:String(f.get('title')).trim(),body:String(f.get('body')).trim(),expiresAt:String(f.get('expiresAt')||''),pinned:f.has('pinned'),targetIds};
     if(!data.title||!data.body){msg('請填寫公告標題與內容',true);return;}
     const btn=e.target.querySelector('[type=submit]');btn.disabled=true;
     try{
@@ -1513,7 +1475,7 @@ function renderHome(){
   const doneWorks=allWorks.filter(w=>getStatus(w)==='done');
   const currentLesson=[...allLessons].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))[0];
   const unread=visibleAnnouncements().filter(a=>!(a.readBy||[]).includes(me.uid)).length;
-  $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">🌼 每天進步一點點</span><h2>今天也一起加油吧！</h2><p class="muted">${esc(date)}・星期${weekday}${subject?'｜今天是'+esc(subject)+'課':''}</p></div><span class="home-hero-emoji">${petAvatar(p)}</span><div class="home-petbar"><div class="top"><b>${esc(p.name||'我的寵物')}・Lv. ${petLevel(p)}</b><span>${xp} XP</span></div><div class="home-track"><div style="width:${percent}%"></div></div><small>距離下一次進化還需 ${Math.max(0,upper-xp)} XP</small></div></div>
+  $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">🌼 每天進步一點點</span><h2>今天也一起加油吧！</h2><p class="muted">${esc(date)}・星期${weekday}${subject&&subjectAllowed(subject)?'｜今天是'+esc(subject)+'課':''}</p></div><span class="home-hero-emoji">${petAvatar(p)}</span><div class="home-petbar"><div class="top"><b>${esc(p.name||'我的寵物')}・Lv. ${petLevel(p)}</b><span>${xp} XP</span></div><div class="home-track"><div style="width:${percent}%"></div></div><small>距離下一次進化還需 ${Math.max(0,upper-xp)} XP</small></div></div>
   <div class="home-stats"><div><b>${pendingWorks.length}</b><small>待完成作業</small></div><div><b>${pendingQuizzes.length}</b><small>待完成測驗</small></div><div><b>${recent?esc(recent.score):'—'}</b><small>最近考試</small></div></div>
   <div class="student-shortcuts">
     <button data-home-tab="quizzes">🧪 開始預習 <small>${pendingQuizzes.length} 份待完成</small></button>
@@ -1767,6 +1729,12 @@ function editHomework(existing=null,defaults={}){
 
   setupRecipients();
   setupCurriculumSelector(preset);
+  if(!existing){
+    $("#currSubject")?.addEventListener('change',e=>{
+      const eligible=new Set(studentsForSubject(e.target.value).map(x=>x.uid));
+      document.querySelectorAll('#recipientList input[name="recipient"]').forEach(x=>x.checked=eligible.has(x.value));
+    });
+  }
   bindTitleTracking(existing);
 
   $("#cancelHomework").onclick=render;
@@ -1956,7 +1924,7 @@ function editStandard(kind,existing=null,defaults={},mount="#content"){
           placeholder="選擇章節後自動帶入">
       </label>
 
-      ${formHTML}
+      ${kind==='progress'?`<details class="full"><summary style="cursor:pointer;padding:10px;color:#475569">更多進度細節（選填）</summary><div class="formgrid" style="margin-top:10px">${formHTML}</div></details>`:formHTML}
 
       ${kind==="grades"?`
         <div class="full">
@@ -1974,6 +1942,12 @@ function editStandard(kind,existing=null,defaults={},mount="#content"){
 
   setupRecipients();
   setupCurriculumSelector(preset);
+  if(!existing){
+    $("#currSubject")?.addEventListener('change',e=>{
+      const eligible=new Set(studentsForSubject(e.target.value).map(x=>x.uid));
+      document.querySelectorAll('#recipientList input[name="recipient"]').forEach(x=>x.checked=eligible.has(x.value));
+    });
+  }
   bindTitleTracking(existing);
 
   $("#cancel").onclick=()=>{if(mount!=="#content"){$(mount).classList.add("hide");}else render();};
@@ -2327,15 +2301,16 @@ function renderStudentManagement(){
       <label>學生姓名<input name="name" required maxlength="40" placeholder="例如：王小明"></label>
       <label>英文帳號<input name="username" required minlength="3" maxlength="20" pattern="[a-zA-Z][a-zA-Z0-9_]{2,19}" placeholder="例如：xiaoming"></label>
       <label>初始密碼<input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="至少 6 碼"></label>
+      <div class="full curriculum-box"><strong>上課科目（可複選）</strong><div class="student-list">${SUBJECT_OPTIONS.map(x=>`<label class="student-check"><input type="checkbox" name="studentSubjects" value="${esc(x)}"> ${esc(x)}</label>`).join('')}</div></div>
       <div class="actions full"><button type="submit">＋建立學生帳號</button></div>
     </form>
     <h3>目前學生（${allStudentProfiles.length} 位）</h3>
     <div id="manageStudentList">${allStudentProfiles.length?allStudentProfiles.map(s=>`
       <div class="item">
-        <div class="top"><div><strong>${esc(s.name||"未命名")}</strong><p class="muted">${esc(s.username||"（舊帳號）")}</p></div>
-        <div class="actions" style="margin:0;align-items:center"><span class="pill" style="background:${s.active===false?'#fff0e8':'#e7f8ee'};color:${s.active===false?'#a45235':'#28764b'}">${s.active===false?'已停用':'使用中'}</span><button class="secondary" data-rename-student="${esc(s.uid)}">修改姓名</button><button class="secondary" data-toggle-student="${esc(s.uid)}">${s.active===false?'恢復帳號':'停用帳號'}</button><button class="danger" data-delete-student="${esc(s.uid)}">永久刪除</button></div></div>
+        <div class="top"><div><strong>${esc(s.name||"未命名")}</strong><p class="muted">${esc(s.username||"（舊帳號）")}</p><div>${studentSubjectBadges(s)}</div></div>
+        <div class="actions" style="margin:0;align-items:center"><span class="pill" style="background:${s.active===false?'#fff0e8':'#e7f8ee'};color:${s.active===false?'#a45235':'#28764b'}">${s.active===false?'已停用':'使用中'}</span><button class="secondary" data-subject-student="${esc(s.uid)}">設定科目</button><button class="secondary" data-rename-student="${esc(s.uid)}">修改姓名</button><button class="secondary" data-toggle-student="${esc(s.uid)}">${s.active===false?'恢復帳號':'停用帳號'}</button><button class="secondary" data-delete-student="${esc(s.uid)}">手動刪除指引</button></div></div>
       </div>`).join(""):'<div class="empty">目前沒有學生</div>'}</div>
-    <p class="muted">停用後學生無法使用網站，資料保留，可隨時恢復。永久刪除會移除登入帳號及所有相關資料，無法復原；請先備份。</p>
+    <p class="muted">停用後學生無法使用網站，資料保留，可隨時恢復。永久刪除請依提示到 Firebase Console 手動完成（網站不呼叫付費後端函式）。</p>
   `;
   $("#createStudentForm").onsubmit=async e=>{
     e.preventDefault();
@@ -2344,6 +2319,8 @@ function renderStudentManagement(){
     const name=String(f.get("name")||"").trim();
     const username=String(f.get("username")||"").trim().toLowerCase();
     const password=String(f.get("password")||"");
+    const subjects=f.getAll('studentSubjects').map(String);
+    if(!subjects.length){msg('請至少勾選一個上課科目',true);return;}
     if(!name||!/^[a-z][a-z0-9_]{2,19}$/.test(username)||password.length<6){
       msg("請確認姓名、英文帳號與至少 6 碼的密碼",true);return;
     }
@@ -2355,7 +2332,7 @@ function renderStudentManagement(){
       const result=await createUserWithEmailAndPassword(studentCreationAuth,email,password);
       createdUid=result.user.uid;
       await setDoc(doc(db,"users",createdUid),{
-        name,username,role:"student",active:true
+        name,username,role:"student",active:true,subjects
       });
       await signOut(studentCreationAuth);
       await loadStudents();
@@ -2371,6 +2348,19 @@ function renderStudentManagement(){
       try{await signOut(studentCreationAuth);}catch(_e){}
     }
   };
+  $("#manageStudentList").querySelectorAll('[data-subject-student]').forEach(b=>{
+    b.onclick=async()=>{
+      const st=allStudentProfiles.find(x=>x.uid===b.dataset.subjectStudent);if(!st)return;
+      const current=studentSubjects(st);
+      const value=prompt('設定 '+st.name+' 的上課科目（以頓號或逗號分隔）\n可用：數學、理化、生物、其他',current.join('、'));
+      if(value===null)return;
+      const chosen=[...new Set(value.split(/[、,，\s]+/).map(x=>x.trim()).filter(Boolean))];
+      if(!chosen.length||chosen.some(x=>!SUBJECT_OPTIONS.includes(x))){msg('請輸入有效科目，至少一科',true);return;}
+      b.disabled=true;
+      try{await updateDoc(doc(db,'users',st.uid),{subjects:chosen});await loadStudents();renderStudentManagement();msg('已更新 '+st.name+' 的上課科目');}
+      catch(e){b.disabled=false;msg('更新科目失敗：'+e.message,true);}
+    };
+  });
   $("#manageStudentList").querySelectorAll("[data-toggle-student]").forEach(b=>{
     b.onclick=async()=>{
       const uid=b.dataset.toggleStudent;
@@ -2386,21 +2376,10 @@ function renderStudentManagement(){
       }catch(e){b.disabled=false;msg('操作失敗：'+e.message,true)}
     };
   });
-  $("#manageStudentList").querySelectorAll("[data-delete-student]").forEach(b=>{
-    b.onclick=async()=>{
-      const uid=b.dataset.deleteStudent;
-      const student=allStudentProfiles.find(s=>s.uid===uid);
-      if(!student)return;
-      const display=student.username||student.name||uid;
-      if(!confirm(`⚠️ 永久刪除「${student.name||display}」？\n會刪除登入帳號、作業、成績、寵物、抽獎獎品及日記等資料，無法復原。\n請先備份！`))return;
-      const answer=prompt(`最後確認：請輸入學生的英文帳號「${display}」才能永久刪除`);
-      if(answer!==display){if(answer!==null)msg('驗證文字不符，已取消刪除',true);return;}
-      b.disabled=true;
-      try{
-        const result=await deleteStudentAccount({uid});
-        await loadStudents();renderStudentManagement();
-        msg('已永久刪除：'+display);
-      }catch(e){b.disabled=false;msg('永久刪除未完成：'+e.message+'。請檢查後端函式部署與 Firebase 計費方案。',true)}
+  $("#manageStudentList").querySelectorAll('[data-delete-student]').forEach(b=>{
+    b.onclick=()=>{
+      const st=allStudentProfiles.find(x=>x.uid===b.dataset.deleteStudent);if(!st)return;
+      alert('免費方案的安全刪除流程：\n1. 先停用學生。\n2. 備份資料。\n3. 到 Firebase Console 的 Authentication 刪除對應 UID。\n4. 再到 Firestore 清理該學生的相關文件。\n\n學生 UID：'+st.uid+'\n請勿刪除老師帳號。');
     };
   });
   $("#manageStudentList").querySelectorAll("[data-rename-student]").forEach(b=>{
