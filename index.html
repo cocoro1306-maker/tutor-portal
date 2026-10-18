@@ -287,6 +287,11 @@ input[type=checkbox]{accent-color:#db8d8d}
 .student-grade-table tbody tr:nth-child(even){background:#fffafc}
 .student-grade-table td:nth-child(3){min-width:120px}
 .student-grade-score{white-space:nowrap;color:#a44e75}
+
+/* 學生首頁：待辦紅點，完成後依最新資料自動消失 */
+.student-shortcuts button{position:relative}
+.student-shortcuts .todo-dot{position:absolute;top:10px;right:12px;width:12px;height:12px;border-radius:50%;background:#f04462;border:2px solid #fff;box-shadow:0 0 0 2px #f8c4ce,0 2px 6px #e9899e;pointer-events:none}
+.student-shortcuts button:focus-visible{outline:3px solid #df7993;outline-offset:2px}
 </style>
 </head>
 <body>
@@ -1484,13 +1489,16 @@ function renderHome(){
   const doneWorks=allWorks.filter(w=>getStatus(w)==='done');
   const currentLesson=[...allLessons].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))[0];
   const unread=visibleAnnouncements().filter(a=>!(a.readBy||[]).includes(me.uid)).length;
+  // 只有老師已確認完成、尚未領過食物的作業才會提示寵物餵食。
+  const feedReady=allWorks.filter(w=>getStatus(w)==='done'&&!(p.fedIds||[]).includes(w.id)).length;
+  const dot=(show,label)=>show?`<span class="todo-dot" role="img" aria-label="${label}" title="${label}"></span>`:'';
   $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">🌼 每天進步一點點</span><h2>今天也一起加油吧！</h2><p class="muted">${esc(date)}・星期${weekday}${subject&&subjectAllowed(subject)?'｜今天是'+esc(subject)+'課':''}</p></div><span class="home-hero-emoji">${petAvatar(p)}</span><div class="home-petbar"><div class="top"><b>${esc(p.name||'我的寵物')}・Lv. ${petLevel(p)}</b><span>${xp} XP</span></div><div class="home-track"><div style="width:${percent}%"></div></div><small>距離下一次進化還需 ${Math.max(0,upper-xp)} XP</small></div></div>
   <div class="home-stats"><div><b>${pendingWorks.length}</b><small>待完成作業</small></div><div><b>${pendingQuizzes.length}</b><small>待完成測驗</small></div><div><b>${recent?esc(recent.score):'—'}</b><small>最近考試</small></div></div>
   <div class="student-shortcuts">
-    <button data-home-tab="quizzes">🧪 開始預習 <small>${pendingQuizzes.length} 份待完成</small></button>
-    <button data-home-tab="homework">📝 我的作業 <small>${doneWorks.length} 份已完成</small></button>
-    <button data-home-tab="pet">🐾 寵物小屋 <small>${xp} XP</small></button>
-    <button data-home-tab="announcements">📢 老師公告 <small>${unread} 則未讀</small></button>
+    <button data-home-tab="quizzes">${dot(pendingQuizzes.length>0,'有未做測驗')}🧪 開始預習 <small>${pendingQuizzes.length} 份待完成</small></button>
+    <button data-home-tab="homework">${dot(pendingWorks.length>0,'有待處理作業')}📝 我的作業 <small>${pendingWorks.length} 份待處理・${doneWorks.length} 份已完成</small></button>
+    <button data-home-tab="pet">${dot(feedReady>0,'有食物可以餵食')}🐾 寵物小屋 <small>${feedReady?`${feedReady} 份食物待餵・`:''}${xp} XP</small></button>
+    <button data-home-tab="announcements">${dot(unread>0,'有未讀公告')}📢 老師公告 <small>${unread} 則未讀</small></button>
   </div>
   <section class="home-block home-learning"><div class="top"><h3>📖 目前學習進度</h3>${quick('progress','查看進度 →')}</div>${currentLesson?`<div class="home-list-row"><div><b>${esc(currentLesson.title||currentLesson.subject||'本週課程')}</b><p class="muted">${esc(currentLesson.detail||'持續累積每天的進步！')}</p><p class="muted">${esc(currentLesson.date||'')}</p></div><span class="pill">${esc(currentLesson.subject||'學習中')}</span></div>`:'<p class="muted">老師更新課程後，就會在這裡顯示最新學習進度。</p>'}</section>
   <section class="home-block"><div class="top"><h3>📋 我的學習任務</h3>${quick('homework','查看作業 →')}</div>
