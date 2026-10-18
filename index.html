@@ -988,21 +988,38 @@ async function grantTeacherReward(studentId,sourceKind,sourceId,amount,reason){
   });
   return granted;
 }
+/* 已顯示過的獎勵依學生 UID 永久保存；重新登入不再重播舊獎勵。 */
+const rewardSeenMemory=new Map();
+function rewardSeenKey(uid){return 'learningCornerSeenRewardEvents_v1_'+uid;}
+function readSeenRewards(uid){
+  try{
+    const stored=JSON.parse(localStorage.getItem(rewardSeenKey(uid))||'[]');
+    return new Set(Array.isArray(stored)?stored.filter(x=>typeof x==='string'):[]);
+  }catch(e){return rewardSeenMemory.get(uid)||new Set();}
+}
+function saveSeenRewards(uid,seen){
+  rewardSeenMemory.set(uid,new Set(seen));
+  try{localStorage.setItem(rewardSeenKey(uid),JSON.stringify([...seen]));}
+  catch(e){console.warn('無法永久儲存獎勵已讀狀態',e);}
+}
 async function deliverPendingRewards(){
   if(isAdmin()||!me?.uid)return;
+  const uid=me.uid;
   try{
-    const snap=await getDocs(query(collection(db,'petEvents'),where('studentId','==',me.uid)));
-    const items=snap.docs.filter(d=>d.data().type==='reward'&&!seenRewards.has(d.id))
+    const snap=await getDocs(query(collection(db,'petEvents'),where('studentId','==',uid)));
+    if(me?.uid!==uid)return;
+    const seen=readSeenRewards(uid);
+    const items=snap.docs.filter(d=>d.data().type==='reward'&&!seen.has(d.id))
       .sort((a,b)=>(a.data().createdAt?.seconds||0)-(b.data().createdAt?.seconds||0));
-    if(items.length){
-      const latest=items[items.length-1],d=latest.data();
-      const total=items.reduce((n,x)=>n+Number(x.data().delta||0),0);
-      items.forEach(x=>seenRewards.add(x.id));
-      xpCelebration(total,items.length===1?d.reason:`你有 ${items.length} 筆新的學習獎勵`);
-    }
+    if(!items.length)return;
+    const latest=items[items.length-1],d=latest.data();
+    const total=items.reduce((n,x)=>n+Number(x.data().delta||0),0);
+    items.forEach(x=>seen.add(x.id));
+    // 顯示前記錄已提醒，避免重整、重登反覆跳出相同獎勵。
+    saveSeenRewards(uid,seen);
+    xpCelebration(total,items.length===1?d.reason:`你有 ${items.length} 筆新的學習獎勵`);
   }catch(e){console.warn('獎勵提醒讀取失敗',e)}
 }
-const seenRewards=new Set();
 async function claimStarterGift(){
   if(isAdmin()||!me?.uid||profile?.starterGift!==35)return;
   const pr=doc(db,'pets',me.uid);
