@@ -280,6 +280,13 @@ input[type=checkbox]{accent-color:#db8d8d}
 .student-check{min-height:42px}
 .home-list-row{border-radius:12px}
 @media(max-width:700px){.formgrid{grid-template-columns:1fr}.panel{padding:14px}.section-check{width:100%}.home-quick button,.student-shortcuts button{min-height:48px}}
+.student-grade-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.student-grade-table{width:100%;min-width:430px;border-collapse:collapse;text-align:left;font-size:14px}
+.student-grade-table th,.student-grade-table td{padding:12px 10px;border-bottom:1px solid #eadfe3;vertical-align:middle}
+.student-grade-table thead{background:#fff2f6}
+.student-grade-table tbody tr:nth-child(even){background:#fffafc}
+.student-grade-table td:nth-child(3){min-width:120px}
+.student-grade-score{white-space:nowrap;color:#a44e75}
 </style>
 </head>
 <body>
@@ -413,10 +420,10 @@ const fields={
 };
 
 const statusNames={
-  unchecked:"未批改",
+  unchecked:"未完成",
   done:"已完成",
-  correct:"需要訂正",
-  missing:"未寫"
+  correct:"需訂正",
+  missing:"未繳交"
 };
 
 const attendanceNames={
@@ -984,7 +991,7 @@ function renderPet(){
   <p>Lv. ${petLevel(p)} ・ ${xp} XP ・ ${n>=4?'成熟期':n>=1?'成長期':'幼年期'}</p>
   <div class="pet-bar"><div class="pet-fill" style="width:${progress}%"></div></div><p class="muted">距離下一次進化還需 ${Math.max(0,upper-xp)} XP · 進化後寵物會變大，並獲得抽獎機會</p>
   ${!isAdmin()?`<button id="editPet" class="secondary">✏️ 選擇 Emoji／幫寵物取名</button>`:''}</div>
-  <h3>🍱 餵食時間</h3>${ready.length?`<div class="pet-feed-list">${ready.map((w,i)=>`<div class="pet-feed-row"><span>${PET_FOODS[i%4]} ${esc(w.title||w.subject||'完成的作業')}</span>${isAdmin()?'<span class="muted">學生可自行餵食</span>':`<button data-feed="${esc(w.id)}" data-food="${PET_FOODS[i%4]}">餵食 ＋10 XP</button>`}</div>`).join('')}</div>`:'<div class="empty">🌷 目前沒有待領取的食物。老師確認作業完成後就會出現！</div>'}
+  <h3>🍱 餵食時間</h3><p class="muted">老師把作業狀態改為「已完成」後，這裡就會出現食物；每份作業可領 +10 XP 一次。</p>${ready.length?`<div class="pet-feed-list">${ready.map((w,i)=>`<div class="pet-feed-row"><span>${PET_FOODS[i%4]} ${esc(w.title||w.subject||'完成的作業')}</span>${isAdmin()?'<span class="muted">學生可自行餵食</span>':`<button data-feed="${esc(w.id)}" data-food="${PET_FOODS[i%4]}">餵食 ＋10 XP</button>`}</div>`).join('')}</div>`:'<div class="empty">🌷 目前沒有待領取的食物。老師確認作業完成後就會出現！</div>'}
   <section class="reward-card"><h3>🎁 進化驚喜禮物盒</h3><p class="muted">每次進化可以抽一次！選一個喜歡的禮物盒，立即揭曉驚喜獎品 ♡</p>
   <p class="pill">可抽獎次數：${remainingDraws(p)}</p>
   <div class="gift-grid">${[0,1,2].map(i=>`<button class="gift-box" data-box="${i}" ${isAdmin()||remainingDraws(p)<1?'disabled':''}>🎁<small>神祕禮物 ${'ABC'[i]}</small></button>`).join('')}</div>
@@ -1601,7 +1608,7 @@ function renderHomework(){
             status:s.value,
             done:s.value==="done"
           });
-          msg("已更新作業狀態");
+          msg(s.value==="done"?"已確認完成！學生現在可以到寵物小屋餵食，領取 +10 XP。":s.value==="correct"?"已標記需訂正，暫時不能餵食。":"已更新作業狀態，尚未開放餵食。");
           await reload();
         }catch(error){
           s.disabled=false;
@@ -1621,6 +1628,20 @@ function renderHomework(){
     homeworkFilter=e.target.value;
     renderHomework();
   };
+}
+
+async function retryGradeReward(gradeId){
+  const g=(cache.grades||[]).find(x=>x.id===gradeId);
+  if(!g||!isAdmin())return;
+  const score=Number(g.score),pts=score===100?20:score>=90?15:score>=80?10:0;
+  if(!pts){msg('這筆成績未達 80 分，沒有 XP 獎勵');return}
+  try{
+    const pet=await getDoc(doc(db,'pets',g.studentId));
+    if(!pet.exists()){msg('這位學生尚未建立寵物，請學生先建立寵物再補發 XP',true);return}
+    const granted=await grantTeacherReward(g.studentId,'grades',g.id,pts,`考試 ${score} 分達標`);
+    msg(granted?`已補發 ${pts} XP，學生重新整理即可看到！`:'這筆成績已領取過，或尚未符合發放條件。');
+    await reload();
+  }catch(e){msg('XP 補發失敗：'+e.message,true)}
 }
 
 function homeworkRow(x,i){
@@ -1643,7 +1664,7 @@ function homeworkRow(x,i){
       ${isAdmin()?`
         <div class="hw-controls">
           <label>
-            批改結果
+            作業狀態（老師確認後才能餵食）
             <select data-status="${esc(x.id)}">
               ${Object.entries(statusNames).map(([key,label])=>`
                 <option value="${key}"
@@ -1710,7 +1731,7 @@ function editHomework(existing=null,defaults={}){
       </label>
 
       <label>
-        批改狀態
+        作業狀態（發布預設未完成）
         <select name="status">
           ${Object.entries(statusNames).map(([key,label])=>`
             <option value="${key}"
@@ -1752,7 +1773,7 @@ function editHomework(existing=null,defaults={}){
       return;
     }
 
-    const status=String(f.get("status"));
+    const status=existing?String(f.get("status")):"unchecked";
 
     const data={
       date:String(f.get("date")),
@@ -1930,7 +1951,7 @@ function editStandard(kind,existing=null,defaults={},mount="#content"){
 
       ${kind==="grades"?`
         <div class="full">
-          <span class="pill">滿分固定：100 分</span>
+          <span class="pill">滿分固定：100 分</span><p class="muted">🐾 80～89 分 +10 XP｜90～99 分 +15 XP｜100 分 +20 XP；每筆成績只發一次。若學生尚未建立寵物，請建立後由老師補發。</p>
         </div>
       `:""}
 
@@ -2272,7 +2293,9 @@ function renderGrades(){
     <h2>📊 成績管理</h2>
     ${isAdmin()?`<section class="grade-section"><div class="top"><h3>✏️ 新成績輸入</h3><button id="toggleGradeForm" class="secondary" type="button">收合輸入區</button></div><div id="gradeEntry"></div></section>`:""}
     <section class="grade-section"><h3>📈 各科成績趨勢</h3><p class="muted">每個科目有自己的折線，不會與其他科目連接。橫軸為考試日期，縱軸為分數（滿分 100 分），點擊分數點查看考卷名稱。</p>${svg}</section>
-    <section class="grade-section"><h3>📋 已登記成績（${arr.length} 筆）</h3><div id="records">${arr.length?[...arr].reverse().map(x=>record(x)).join(""):'<div class="empty">尚無登記的成績</div>'}</div></section>`;
+    <section class="grade-section"><h3>${isAdmin()?"📋 已登記成績":"📋 我的成績紀錄"}（${arr.length} 筆）</h3><div id="records">${isAdmin()
+      ? (arr.length?[...arr].reverse().map(x=>record(x)+(Number(x.score)>=80?`<div class="actions" style="margin:-6px 0 14px 8px"><button type="button" class="secondary" data-retry-grade-xp="${esc(x.id)}">🐾 檢查／補發這筆成績 XP</button></div>`:"")).join(""):'<div class="empty">尚無登記的成績</div>')
+      : (arr.length?`<div class="student-grade-scroll"><table class="student-grade-table"><thead><tr><th>日期</th><th>科目</th><th>考試名稱</th><th>分數</th></tr></thead><tbody>${[...arr].reverse().map(x=>`<tr><td>${esc(x.date||"—")}</td><td>${esc(x.subject||"未分類")}</td><td>${esc(x.title||"未命名考試")}</td><td><strong class="student-grade-score">${esc(x.score)} 分</strong></td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">目前還沒有考試成績</div>')}</div></section>`;
   if(isAdmin()){
     editStandard("grades",null,{},"#gradeEntry");
     $("#toggleGradeForm").onclick=()=>{
@@ -2281,6 +2304,7 @@ function renderGrades(){
     };
     $("#records").querySelectorAll("[data-edit]").forEach(b=>editButton(b,arr));
     $("#records").querySelectorAll("[data-delete]").forEach(b=>{b.onclick=()=>remove("grades",b.dataset.delete);});
+    $("#records").querySelectorAll("[data-retry-grade-xp]").forEach(b=>{b.onclick=()=>retryGradeReward(b.dataset.retryGradeXp);});
   }
   const showPoint=i=>{
     const item=arr[i];if(!item)return;
