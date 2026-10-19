@@ -306,6 +306,40 @@ input[type=checkbox]{accent-color:#db8d8d}
 .xp-history-negative{color:#bb4960;font-weight:700;white-space:nowrap}
 
 /* 老師首頁：依上課科目分組的條列式學生清單 */
+/* 老師工作台：輕量卡片、今日課程、待辦與快捷入口 */
+.teacher-workspace{display:flex;flex-direction:column;gap:16px}
+.teacher-workspace-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.teacher-workspace-header h2{margin:0 0 6px;font-size:clamp(25px,4vw,32px);color:#604b49}
+.teacher-workspace-header p{margin:0;color:#9b8580;font-size:14px}
+.teacher-workspace-label{background:#f9e7eb;color:#a15b72;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:700;white-space:nowrap}
+.teacher-workspace-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.teacher-workspace-stat{border:1px solid #f1e0d8;border-radius:17px;padding:15px 10px;background:#fffaf7;text-align:center}
+.teacher-workspace-stat .stat-icon{display:block;font-size:20px;margin-bottom:6px}
+.teacher-workspace-stat strong{display:block;font-size:29px;color:#9d6878;line-height:1.2}
+.teacher-workspace-stat small{display:block;margin-top:5px;color:#947f7a;font-size:12px}
+.teacher-today-card{display:flex;align-items:center;gap:14px;border:1px solid #f1dcca;background:linear-gradient(115deg,#fff3df,#fff7ee 58%,#ffecf1);border-radius:18px;padding:16px 18px}
+.teacher-today-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:15px;background:#fff9f4;font-size:25px;flex:none}
+.teacher-today-info{min-width:0;flex:1}
+.teacher-today-info small{display:block;color:#a18079;font-size:12px;margin-bottom:4px}
+.teacher-today-info strong{display:block;color:#73545b;font-size:20px}
+.teacher-today-info p{margin:4px 0 0;color:#9a827e;font-size:12px}
+.teacher-today-card .teacher-today-tag{background:#fff9f5;color:#a56a78;border:1px solid #f0dbd7;border-radius:999px;padding:6px 10px;font-size:12px;white-space:nowrap}
+.teacher-workspace-section{background:#fffdfb;border:1px solid #efdfd6;border-radius:18px;padding:17px}
+.teacher-workspace-section .section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.teacher-workspace-section .section-head h3{margin:0;color:#654d4c;font-size:19px}
+.teacher-workspace-section .section-head .secondary{font-size:12px;min-height:32px;padding:6px 10px}
+.teacher-workspace-empty{color:#a28c87;font-size:13px;margin:9px 0}
+.teacher-review-row{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid #f5ebe4;padding:13px 0}
+.teacher-review-row:first-of-type{border-top:0}
+.teacher-review-row strong{display:block;color:#66504e;font-size:15px}
+.teacher-review-row p{margin:5px 0;color:#98837e;font-size:12px}
+.teacher-review-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.teacher-review-actions button{font-size:12px;padding:8px 10px;min-height:34px}
+.teacher-review-count{display:inline-block;border-radius:999px;background:#ffe2e8;color:#aa4e67;font-size:12px;padding:4px 9px}
+.teacher-workspace-quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.teacher-workspace-quick button{background:#fff1e8;border:1px solid #f1dcd7;color:#7b5c61;min-height:60px;font-size:13px}
+@media(max-width:650px){.teacher-workspace-quick{grid-template-columns:repeat(2,minmax(0,1fr))}.teacher-review-row{align-items:flex-start;flex-direction:column}.teacher-review-actions{justify-content:flex-start}.teacher-today-card{padding:13px}.teacher-today-tag{display:none}}
+
 .teacher-subject-overview{display:flex;flex-direction:column;gap:15px;margin-top:14px}
 .teacher-subject-group{border:1px solid #eeddd2;border-radius:17px;overflow:hidden;background:#fffdfa}
 .teacher-subject-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff0e5;padding:12px 16px}
@@ -1613,11 +1647,18 @@ function renderHome(){
     }).join('');
     return `<div class="teacher-subject-group"><div class="teacher-subject-heading"><h4>📚 ${esc(group)}</h4><span>${grouped.get(group).length} 位學生</span></div><div class="teacher-subject-rows">${rows}</div></div>`;
   }).join('');
-  $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">👩‍🏫 全班工作台</span><h2>學生學習總覽</h2><p class="muted">${esc(date)}・星期${weekday}｜所有學生的重要資訊</p></div><span class="home-hero-emoji">📚</span></div>
-  <div class="home-stats"><div><b>${students.length}</b><small>使用中學生</small></div><div><b>${submitted.length}</b><small>學生提交待批改</small></div><div><b>${pending.length}</b><small>尚未完成作業</small></div></div>
-  <section class="home-block"><div class="top"><h3>🔔 待批改作業 ${submitted.length?`<span class="teacher-alert inline">${submitted.length}</span>`:''}</h3>${quick('homework','前往批改 →')}</div>${submitted.length?submitted.slice(0,8).map(w=>`<div class="home-list-row"><div><b>${esc(studentName(w.studentId))}：${esc(w.title||'作業')}</b><p class="muted">${esc(w.subject||'')}・${getStatus(w)==='correct'?'已再次提交訂正':'學生已按完成，等待老師批改'}</p></div><button data-review-homework="${esc(w.id)}">批改 →</button></div>`).join(''):'<p class="muted">目前沒有學生提交待批改的作業 ✨</p>'}</section>
-  <section class="home-block"><div class="top"><h3>👥 學生學習概況</h3>${quick('students','學生管理 →')}</div><div class="teacher-subject-overview">${groups||'<p class="muted">尚無學生</p>'}</div></section>
-  <section class="home-block"><h3>⚡ 快速操作</h3><div class="home-quick">${quick('homework','📝 發布作業')}${quick('attendance','📅 登記出席')}${quick('progress','✏️ 新增進度')}${quick('grades','📊 登記成績')}</div></section>`;
+  const todayClass={3:{name:'理化',icon:'🧪',hint:'星期三固定理化課'},4:{name:'數學',icon:'📐',hint:'星期四固定數學課'},6:{name:'生物',icon:'🌿',hint:'星期六固定生物課'}}[new Date().getDay()];
+  const lessonTitle=todayClass?`今天上 ${todayClass.name} 課`:'今天沒有固定課程';
+  const lessonHint=todayClass?todayClass.hint:'星期三理化・星期四數學・星期六生物';
+  const reviewRows=submitted.slice(0,8).map(w=>`<div class="teacher-review-row"><div><strong>${esc(studentName(w.studentId))} · ${esc(w.subject||'未設定科目')}</strong><p>${esc(w.title||'作業')}｜${getStatus(w)==='correct'?'學生已再次提交訂正':'學生已繳交'}</p></div><div class="teacher-review-actions"><span class="teacher-subject-status review">待批改</span><button type="button" data-review-homework="${esc(w.id)}">批改作業 →</button></div></div>`).join('');
+  $('#content').innerHTML=`<div class="teacher-workspace">
+    <div class="teacher-workspace-header"><div><h2>老師工作台</h2><p>所有學生的學習狀況，一眼掌握</p></div><span class="teacher-workspace-label">全班總覽</span></div>
+    <div class="teacher-workspace-stats"><div class="teacher-workspace-stat"><span class="stat-icon">👥</span><strong>${students.length}</strong><small>學生人數</small></div><div class="teacher-workspace-stat"><span class="stat-icon">📋</span><strong>${submitted.length}</strong><small>待批改</small></div><div class="teacher-workspace-stat"><span class="stat-icon">📖</span><strong>${pending.length}</strong><small>待完成作業</small></div></div>
+    <div class="teacher-today-card"><span class="teacher-today-icon">${todayClass?todayClass.icon:'🗓️'}</span><div class="teacher-today-info"><small>${esc(date)}・星期${weekday}｜今日課程</small><strong>${lessonTitle}</strong><p>${lessonHint}</p></div><span class="teacher-today-tag">每週固定課表</span></div>
+    <section class="teacher-workspace-section"><div class="section-head"><h3>待處理事項 ${submitted.length?`<span class="teacher-review-count">${submitted.length} 件</span>`:''}</h3>${quick('homework','查看全部 →')}</div>${reviewRows||'<p class="teacher-workspace-empty">目前沒有待批改的作業 ✨</p>'}</section>
+    <section class="teacher-workspace-section"><div class="section-head"><h3>⚡ 快速操作</h3></div><div class="teacher-workspace-quick">${quick('homework','📝 發布作業')}${quick('attendance','📅 登記出席')}${quick('progress','✏️ 新增進度')}${quick('grades','📊 登記成績')}</div></section>
+    <section class="teacher-workspace-section"><div class="section-head"><h3>學生學習概況</h3>${quick('students','學生管理 →')}</div><div class="teacher-subject-overview">${groups||'<p class="teacher-workspace-empty">尚無學生</p>'}</div></section>
+  </div>`;
   $('#content').querySelectorAll('[data-select-student]').forEach(b=>b.onclick=async()=>{selected=b.dataset.selectStudent;$('#studentPicker').value=selected;await reload();tab='homework';render()});
   $('#content').querySelectorAll('[data-review-homework]').forEach(b=>b.onclick=async()=>{const x=hw.find(w=>w.id===b.dataset.reviewHomework);if(!x)return;selected=x.studentId;$('#studentPicker').value=selected;await reload();tab='homework';render()});
  }else{
