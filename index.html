@@ -358,6 +358,7 @@ input[type=checkbox]{accent-color:#db8d8d}
 .teacher-subject-status.review{background:#ffe0e7;color:#ad4162}
 .teacher-subject-chevron{font-size:25px;color:#b9a9a5;line-height:1}
 @media(max-width:550px){.teacher-subject-student{gap:9px;padding:12px 10px}.teacher-subject-avatar{width:32px;height:32px}.teacher-subject-status{font-size:11px;padding:4px 7px}}
+#app.teacher-mode > section.panel:first-child{display:none}
 </style>
 </head>
 <body>
@@ -918,6 +919,8 @@ async function renderBackup(){
 }
 
 function render(){
+  // 老師端使用全班工作台，不顯示舊版單一學生統計頂欄。
+  $("#app").classList.toggle("teacher-mode",isAdmin());
   const works=cache.homework||[];
   const records=cache.progress||[];
 
