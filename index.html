@@ -304,6 +304,26 @@ input[type=checkbox]{accent-color:#db8d8d}
 .xp-history-table tbody tr:nth-child(even){background:#fffafb}
 .xp-history-positive{color:#278c63;font-weight:700;white-space:nowrap}
 .xp-history-negative{color:#bb4960;font-weight:700;white-space:nowrap}
+
+/* 老師首頁：依上課科目分組的條列式學生清單 */
+.teacher-subject-overview{display:flex;flex-direction:column;gap:15px;margin-top:14px}
+.teacher-subject-group{border:1px solid #eeddd2;border-radius:17px;overflow:hidden;background:#fffdfa}
+.teacher-subject-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff0e5;padding:12px 16px}
+.teacher-subject-heading h4{margin:0;color:#79565b;font-size:16px}
+.teacher-subject-heading span{font-size:12px;color:#987f80}
+.teacher-subject-student{width:100%;display:flex;align-items:center;gap:12px;padding:13px 15px;background:transparent;color:inherit;border:0;border-bottom:1px solid #f3e8e1;text-align:left;cursor:pointer;box-shadow:none;border-radius:0}
+.teacher-subject-student:last-child{border-bottom:0}
+.teacher-subject-student:hover{background:#fff5ef;transform:none}
+.teacher-subject-avatar{display:flex;align-items:center;justify-content:center;width:38px;height:38px;flex:none;border-radius:50%;background:#f8edeb;font-size:19px}
+.teacher-subject-info{display:flex;flex:1;flex-direction:column;gap:3px;min-width:0}
+.teacher-subject-info strong{font-size:15px;color:#584447}
+.teacher-subject-info small{font-size:12px;color:#927e7c}
+.teacher-subject-status{font-size:12px;font-weight:700;padding:5px 10px;border-radius:99px;white-space:nowrap}
+.teacher-subject-status.ok{background:#e3f4e6;color:#357b49}
+.teacher-subject-status.pending{background:#fff0df;color:#a66c35}
+.teacher-subject-status.review{background:#ffe0e7;color:#ad4162}
+.teacher-subject-chevron{font-size:25px;color:#b9a9a5;line-height:1}
+@media(max-width:550px){.teacher-subject-student{gap:9px;padding:12px 10px}.teacher-subject-avatar{width:32px;height:32px}.teacher-subject-status{font-size:11px;padding:4px 7px}}
 </style>
 </head>
 <body>
@@ -1567,19 +1587,37 @@ function renderHome(){
   const submitted=hw.filter(x=>x.submitted===true&&getStatus(x)!=='done');
   const pending=hw.filter(x=>getStatus(x)!=='done');
   const studentName=id=>allStudentProfiles.find(s=>s.uid===id)?.name||'學生';
-  const submittedByStudent=Object.groupBy?Object.groupBy(submitted,x=>x.studentId):{};
-  const cards=students.map(st=>{
-    const ownHw=hw.filter(x=>x.studentId===st.uid),ownSub=ownHw.filter(x=>x.submitted===true&&getStatus(x)!=='done');
-    const ownGrades=grades.filter(x=>x.studentId===st.uid).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-    const ownProgress=prog.filter(x=>x.studentId===st.uid).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-    const ownAtt=att.filter(x=>x.studentId===st.uid&&x.status==='present').length;
-    return `<div class="teacher-student-card"><h4>${esc(st.name||'學生')} ${ownSub.length?`<span class="teacher-alert">${ownSub.length}</span>`:''}</h4><p>${esc(studentSubjects(st).join('／'))}</p><p>📝 待批改 ${ownSub.length}・未完成 ${ownHw.filter(x=>getStatus(x)!=='done').length}</p><p>📊 最近成績 ${ownGrades[0]?esc(ownGrades[0].score)+' 分':'尚無'}・出席 ${ownAtt} 次</p><p>📚 最近進度 ${ownProgress[0]?esc(ownProgress[0].title||ownProgress[0].subject||'已登記'):'尚無'}</p><button class="secondary" data-select-student="${esc(st.uid)}">查看這位學生 →</button></div>`;
+  // 依上課科目分組；同時修讀數學、生物的學生顯示於「數學、生物」組。
+  const subjectOrder=['理化','數學','生物'];
+  const grouped=new Map();
+  students.forEach(st=>{
+    const subs=[...new Set(studentSubjects(st).filter(Boolean))].sort((a,b)=>{
+      const ia=subjectOrder.indexOf(a),ib=subjectOrder.indexOf(b);
+      return (ia<0?99:ia)-(ib<0?99:ib)||a.localeCompare(b,'zh-Hant');
+    });
+    const group=subs.length?subs.join('、'):'未設定科目';
+    if(!grouped.has(group))grouped.set(group,[]);
+    grouped.get(group).push(st);
+  });
+  const groupKeys=[...grouped.keys()].sort((a,b)=>{
+    const rank=x=>x==='未設定科目'?999:Math.min(...x.split('、').map(z=>{const i=subjectOrder.indexOf(z);return i<0?99:i;}));
+    return rank(a)-rank(b)||a.localeCompare(b,'zh-Hant');
+  });
+  const groups=groupKeys.map(group=>{
+    const rows=grouped.get(group).map(st=>{
+      const ownHw=hw.filter(x=>x.studentId===st.uid);
+      const ownSub=ownHw.filter(x=>x.submitted===true&&getStatus(x)!=='done');
+      const unfinished=ownHw.filter(x=>getStatus(x)!=='done').length;
+      const status=ownSub.length?'待批改':unfinished?'待完成':'正常';
+      return `<button type="button" class="teacher-subject-student" data-select-student="${esc(st.uid)}" aria-label="查看${esc(st.name||'學生')}的詳細資料"><span class="teacher-subject-avatar">👤</span><span class="teacher-subject-info"><strong>${esc(st.name||'學生')}</strong><small>${esc(studentSubjects(st).join('、')||'未設定科目')}${unfinished?`・${unfinished} 份作業未完成`:''}</small></span><span class="teacher-subject-status ${ownSub.length?'review':unfinished?'pending':'ok'}">${status}${ownSub.length?` ${ownSub.length}`:''}</span><span class="teacher-subject-chevron">›</span></button>`;
+    }).join('');
+    return `<div class="teacher-subject-group"><div class="teacher-subject-heading"><h4>📚 ${esc(group)}</h4><span>${grouped.get(group).length} 位學生</span></div><div class="teacher-subject-rows">${rows}</div></div>`;
   }).join('');
   $('#content').innerHTML=`<div class="home-welcome"><div><span class="pill">👩‍🏫 全班工作台</span><h2>學生學習總覽</h2><p class="muted">${esc(date)}・星期${weekday}｜所有學生的重要資訊</p></div><span class="home-hero-emoji">📚</span></div>
   <div class="home-stats"><div><b>${students.length}</b><small>使用中學生</small></div><div><b>${submitted.length}</b><small>學生提交待批改</small></div><div><b>${pending.length}</b><small>尚未完成作業</small></div></div>
   <section class="home-block"><div class="top"><h3>🔔 待批改作業 ${submitted.length?`<span class="teacher-alert inline">${submitted.length}</span>`:''}</h3>${quick('homework','前往批改 →')}</div>${submitted.length?submitted.slice(0,8).map(w=>`<div class="home-list-row"><div><b>${esc(studentName(w.studentId))}：${esc(w.title||'作業')}</b><p class="muted">${esc(w.subject||'')}・${getStatus(w)==='correct'?'已再次提交訂正':'學生已按完成，等待老師批改'}</p></div><button data-review-homework="${esc(w.id)}">批改 →</button></div>`).join(''):'<p class="muted">目前沒有學生提交待批改的作業 ✨</p>'}</section>
-  <section class="home-block"><div class="top"><h3>👥 全部學生</h3>${quick('students','學生管理 →')}</div><div class="teacher-overview">${cards||'<p class="muted">尚無學生</p>'}</div></section>
-  <section class="home-block"><h3>⚡ 快速登記</h3><div class="home-quick">${quick('progress','✏️ 課程進度')}${quick('attendance','📅 出席紀錄')}${quick('homework','📝 發布／批改作業')}${quick('grades','📊 登記考試成績')}</div></section>`;
+  <section class="home-block"><div class="top"><h3>👥 學生學習概況</h3>${quick('students','學生管理 →')}</div><div class="teacher-subject-overview">${groups||'<p class="muted">尚無學生</p>'}</div></section>
+  <section class="home-block"><h3>⚡ 快速操作</h3><div class="home-quick">${quick('homework','📝 發布作業')}${quick('attendance','📅 登記出席')}${quick('progress','✏️ 新增進度')}${quick('grades','📊 登記成績')}</div></section>`;
   $('#content').querySelectorAll('[data-select-student]').forEach(b=>b.onclick=async()=>{selected=b.dataset.selectStudent;$('#studentPicker').value=selected;await reload();tab='homework';render()});
   $('#content').querySelectorAll('[data-review-homework]').forEach(b=>b.onclick=async()=>{const x=hw.find(w=>w.id===b.dataset.reviewHomework);if(!x)return;selected=x.studentId;$('#studentPicker').value=selected;await reload();tab='homework';render()});
  }else{
