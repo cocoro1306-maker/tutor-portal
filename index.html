@@ -900,14 +900,42 @@ function bankEditor(bank,done){
  };
 }
 
+function teacherStudentChooser(label){
+ if(!isAdmin())return '';
+ return `<section class="grade-section teacher-student-chooser"><label for="pageStudentSelect"><strong>👤 ${esc(label)}</strong><select id="pageStudentSelect">${students.map(st=>`<option value="${esc(st.uid)}" ${st.uid===activeUid()?'selected':''}>${esc(st.name||'學生')}（${esc(studentSubjects(st).join('、')||'未設定科目')}）</option>`).join('')}</select></label><p class="muted">每位學生的紀錄分開顯示；切換後會載入該學生的資料。</p></section>`;
+}
+function wireTeacherStudentChooser(){
+ const picker=$('#pageStudentSelect');if(!picker)return;
+ picker.onchange=async()=>{
+  selected=picker.value;$('#studentPicker').value=selected;
+  await reload();
+ };
+}
 function renderAnalytics(){
  const host=$('#content'),grades=cache.grades||[],homeworks=cache.homework||[],attendance=cache.attendance||[],progress=cache.progress||[];
  const completed=homeworks.filter(x=>getStatus(x)==='done').length,rate=homeworks.length?Math.round(completed/homeworks.length*100):0;
  const avg=grades.length?Math.round(grades.reduce((n,x)=>n+Number(x.score||0),0)/grades.length):null;
  const present=attendance.filter(x=>x.status==='present').length;
- const qs=quizSubmissions.filter(x=>x.studentId===activeUid());
- host.innerHTML=`<h2>📈 學生個人學習總覽</h2>${isAdmin()?`<p class="muted">目前學生：${esc(students.find(x=>x.uid===activeUid())?.name||'未選擇')}</p>`:''}<div class="grid"><div class="stat"><b>考試平均</b><strong>${avg??'—'}</strong></div><div class="stat"><b>作業完成率</b><strong>${rate}%</strong></div><div class="stat"><b>出席紀錄</b><strong>${present}/${attendance.length}</strong></div><div class="stat"><b>完成測驗</b><strong>${qs.length}</strong></div><div class="stat"><b>課程紀錄</b><strong>${progress.length}</strong></div></div><h3>📖 最近課程</h3>${progress.slice(0,8).map(x=>`<div class="item"><b>${esc(x.date)}・${esc(x.title||x.subject)}</b><p>${esc(x.detail||'')}</p></div>`).join('')||'<p class="muted">尚無進度</p>'}<h3>🧪 測驗表現</h3>${qs.map(x=>`<div class="item">${esc(quizzes.find(q=>q.id===x.quizId)?.title||'測驗')}：最高 ${x.bestScore??x.score} 分，作答 ${x.attemptCount||1} 次</div>`).join('')||'<p class="muted">尚無測驗</p>'}`;
+ const studentId=activeUid();
+ const ownResults=quizSubmissions.filter(x=>x.studentId===studentId);
+ const quizRows=quizzes.filter(q=>ownResults.some(x=>x.quizId===q.id)).map(q=>{
+  const result=ownResults.find(x=>x.quizId===q.id);
+  const finished=isPerfect(q,result);
+  return `<div class="item"><div class="top"><div><b>${esc(q.title||'未命名測驗')}</b><p class="muted">${esc(q.subject||'')} ${q.chapter?'・'+esc(q.chapter):''}・最高 ${esc(result.bestScore??result.score??0)} 分・作答 ${esc(result.attemptCount||1)} 次</p></div><span class="pill" style="background:${finished?'#e7f8ee':'#fff0e8'};color:${finished?'#28764b':'#a45235'}">${finished?'✓ 已完成（100%）':'尚未滿分'}</span></div></div>`;
+ }).join('');
+ const workRows=[...homeworks].sort((a,b)=>String(b.date||b.dueDate||'').localeCompare(String(a.date||a.dueDate||''))).map(x=>{
+  const done=getStatus(x)==='done';
+  return `<div class="item"><div class="top"><div><b>${esc(x.title||'作業')}</b><p class="muted">${esc(x.subject||'未設定科目')} ${x.dueDate?'・期限 '+esc(x.dueDate):''}</p></div><span class="pill" style="background:${done?'#e7f8ee':'#fff0e8'};color:${done?'#28764b':'#a45235'}">${done?'✓ 已完成':x.submitted?'已繳交・待批改':'尚未完成'}</span></div></div>`;
+ }).join('');
+ const progressRows=[...progress].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).map(x=>`<div class="item"><b>${esc(x.date||'未填日期')}・${esc(x.subject||'')} ${esc(x.title||'')}</b><p class="muted">${esc(x.detail||'')}</p></div>`).join('');
+ host.innerHTML=`<h2>📖 學生學習總覽</h2>${teacherStudentChooser('選擇要查看的學生')}
+ <div class="grid"><div class="stat"><b>課程紀錄</b><strong>${progress.length}</strong></div><div class="stat"><b>已完成作業</b><strong>${completed}/${homeworks.length}</strong></div><div class="stat"><b>已完成課前小測驗</b><strong>${quizzes.filter(q=>isPerfect(q,ownResults.find(x=>x.quizId===q.id))).length}</strong></div><div class="stat"><b>考試平均</b><strong>${avg??'—'}</strong></div></div>
+ <section class="grade-section"><h3>📖 學習進度</h3>${progressRows||'<p class="muted">目前尚無課程進度</p>'}</section>
+ <section class="grade-section"><h3>🧪 課前小測驗完成情形</h3><p class="muted">達到 100% 才標記為已完成。</p>${quizRows||'<p class="muted">目前尚未作答課前小測驗</p>'}</section>
+ <section class="grade-section"><h3>📝 作業完成情形</h3>${workRows||'<p class="muted">目前尚未指派作業</p>'}</section>`;
+ wireTeacherStudentChooser();
 }
+
 function downloadData(name,text,mime){const blob=new Blob([text],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000)}
 function csvEscape(x){const s=String(x??'');return '"'+s.replace(/"/g,'""')+'"'}
 async function renderBackup(){
@@ -2490,11 +2518,13 @@ function renderGrades(){
     </svg></div><div id="gradePointDetail" class="grade-point-detail" aria-live="polite">👆 點擊圖上的分數點，可以查看考卷名稱與日期。</div>`:'<div class="empty">還沒有考試成績，登記第一筆後就會出現折線圖 ♡</div>';
   $("#content").innerHTML=`
     <h2>📊 成績管理</h2>
+    ${teacherStudentChooser("選擇要登記／查看成績的學生")}
     ${isAdmin()?`<section class="grade-section"><div class="top"><h3>✏️ 新成績輸入</h3><button id="toggleGradeForm" class="secondary" type="button">收合輸入區</button></div><div id="gradeEntry"></div></section>`:""}
     <section class="grade-section"><h3>📈 各科成績趨勢</h3><p class="muted">每個科目有自己的折線，不會與其他科目連接。橫軸為考試日期，縱軸為分數（滿分 100 分），點擊分數點查看考卷名稱。</p>${svg}</section>
     <section class="grade-section"><h3>${isAdmin()?"📋 已登記成績":"📋 我的成績紀錄"}（${arr.length} 筆）</h3><div id="records">${isAdmin()
       ? (arr.length?[...arr].reverse().map(x=>record(x)+(Number(x.score)>=80?`<div class="actions" style="margin:-6px 0 14px 8px"><button type="button" class="secondary" data-retry-grade-xp="${esc(x.id)}">🐾 檢查／補發這筆成績 XP</button></div>`:"")).join(""):'<div class="empty">尚無登記的成績</div>')
       : (arr.length?`<div class="student-grade-scroll"><table class="student-grade-table"><thead><tr><th>日期</th><th>科目</th><th>考試名稱</th><th>分數</th></tr></thead><tbody>${[...arr].reverse().map(x=>`<tr><td>${esc(x.date||"—")}</td><td>${esc(x.subject||"未分類")}</td><td>${esc(x.title||"未命名考試")}</td><td><strong class="student-grade-score">${esc(x.score)} 分</strong></td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">目前還沒有考試成績</div>')}</div></section>`;
+  wireTeacherStudentChooser();
   if(isAdmin()){
     editStandard("grades",null,{},"#gradeEntry");
     $("#toggleGradeForm").onclick=()=>{
