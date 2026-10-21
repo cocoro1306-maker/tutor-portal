@@ -878,12 +878,12 @@ async function loadLotteryWeights(){try{const snap=await getDoc(doc(db,'settings
 function bankEditor(bank,done){
  const host=$('#bankManualEditor'),items=bank?.items||[];
  const blank=()=>({text:'',options:['','','',''],correct:0,explanation:'',points:10,chapter:''});
- host.innerHTML=`<section class="curriculum-box"><h3>${bank?'✏️ 編輯':'＋新增'}題庫</h3><label>題庫名稱<input id="manualBankTitle" value="${esc(bank?.title||'')}" maxlength="80"></label><label>科目<select id="manualBankSubject">${['理化','數學','生物'].map(x=>`<option ${bank?.subject===x?'selected':''}>${x}</option>`).join('')}</select></label><label>章節<input id="manualBankChapter" value="${esc(bank?.chapter||'')}" maxlength="80"></label><div id="manualQuestionList"></div><div class="actions"><button type="button" id="manualAddQuestion">＋新增題目</button><button type="button" id="manualSaveBank">儲存題庫</button><button type="button" id="manualCancel" class="secondary">取消</button></div></section>`;
+ host.innerHTML=`<section class="curriculum-box"><h3>${bank?'✏️ 編輯':'＋新增'}題庫</h3><label>題庫名稱<input id="manualBankTitle" value="${esc(bank?.title||'')}" maxlength="80"></label><label>科目<select id="manualBankSubject">${['理化','數學','生物'].map(x=>`<option ${bank?.subject===x?'selected':''}>${x}</option>`).join('')}</select></label><label>測驗類型<select id="manualBankType"><option ${bank?.quizType!=='課後複習'?'selected':''}>課前預習</option><option ${bank?.quizType==='課後複習'?'selected':''}>課後複習</option></select></label><label>章節<input id="manualBankChapter" value="${esc(bank?.chapter||'')}" maxlength="80"></label><div id="manualQuestionList"></div><div class="actions"><button type="button" id="manualAddQuestion">＋新增題目</button><button type="button" id="manualSaveBank">儲存題庫</button><button type="button" id="manualCancel" class="secondary">取消</button></div></section>`;
  const list=host.querySelector('#manualQuestionList');
  function add(x=blank()){
   if(list.children.length>=100){msg('每個題庫最多 100 題',true);return}
   const row=document.createElement('div');row.className='item bank-manual-row';
-  row.innerHTML=`<div class="top"><b>題目</b><button type="button" class="danger remove-bank-question">移除</button></div><label>題目<textarea class="b-text">${esc(x.text)}</textarea></label>${'ABCD'.split('').map((c,i)=>`<label>選項 ${c}<input class="b-opt" value="${esc(x.options[i]||'')}"></label>`).join('')}<label>答案<select class="b-correct">${'ABCD'.split('').map((c,i)=>`<option value="${i}" ${x.correct===i?'selected':''}>${c}</option>`).join('')}</select></label><label>詳解<textarea class="b-exp">${esc(x.explanation||'')}</textarea></label><label>配分<input type="number" class="b-points" min="1" max="100" value="${Number(x.points||10)}"></label>`;
+  row.innerHTML=`<div class="top"><b>題目</b><button type="button" class="danger remove-bank-question">移除</button></div><label>題目<textarea class="b-text">${esc(x.text)}</textarea></label>${'ABCD'.split('').map((c,i)=>`<label>選項 ${c}<input class="b-opt" value="${esc(x.options[i]||'')}"></label>`).join('')}<label>答案<select class="b-correct">${'ABCD'.split('').map((c,i)=>`<option value="${i}" ${x.correct===i?'selected':''}>${c}</option>`).join('')}</select></label><label>詳解<textarea class="b-exp">${esc(x.explanation||'')}</textarea></label><label>觀念標籤<input class="b-topic" value="${esc(x.topic||'')}" placeholder="例如：反射定律"></label><label>配分<input type="number" class="b-points" min="1" max="100" value="${Number(x.points||10)}"></label>`;
   list.append(row);row.querySelector('.remove-bank-question').onclick=()=>row.remove();
  }
  (items.length?items:[blank()]).forEach(add);
@@ -892,10 +892,10 @@ function bankEditor(bank,done){
  host.querySelector('#manualSaveBank').onclick=async e=>{
   const title=host.querySelector('#manualBankTitle').value.trim(),chapter=host.querySelector('#manualBankChapter').value.trim();
   const subject=host.querySelector('#manualBankSubject').value;
-  const items=[...list.children].map(x=>({chapter,text:x.querySelector('.b-text').value.trim(),options:[...x.querySelectorAll('.b-opt')].map(y=>y.value.trim()),correct:Number(x.querySelector('.b-correct').value),explanation:x.querySelector('.b-exp').value.trim(),points:Number(x.querySelector('.b-points').value)}));
+  const items=[...list.children].map(x=>({chapter,topic:x.querySelector('.b-topic').value.trim(),text:x.querySelector('.b-text').value.trim(),options:[...x.querySelectorAll('.b-opt')].map(y=>y.value.trim()),correct:Number(x.querySelector('.b-correct').value),explanation:x.querySelector('.b-exp').value.trim(),points:Number(x.querySelector('.b-points').value)}));
   if(!title||!items.length||items.some(x=>!x.text||!x.explanation||x.options.some(y=>!y)||!Number.isInteger(x.points)||x.points<1||x.points>100)){msg('請完整填寫題庫名稱、題目、四個選項、詳解與配分',true);return}
   e.target.disabled=true;
-  try{const data={title,chapter,subject,items,teacherId:me.uid};if(bank)await updateDoc(doc(db,'quizBanks',bank.id),data);else await addDoc(collection(db,'quizBanks'),{...data,createdAt:serverTimestamp()});msg('題庫儲存成功');await done()}
+  try{const data={title,chapter,subject,quizType:host.querySelector('#manualBankType').value,items,teacherId:me.uid};if(bank)await updateDoc(doc(db,'quizBanks',bank.id),data);else await addDoc(collection(db,'quizBanks'),{...data,createdAt:serverTimestamp()});msg('題庫儲存成功');await done()}
   catch(err){e.target.disabled=false;msg('題庫儲存失敗：'+err.message,true)}
  };
 }
@@ -1278,13 +1278,13 @@ async function loadQuizzes(){
 }
 function quizResult(q,uid){return quizSubmissions.find(x=>x.quizId===q.id&&x.studentId===uid)}
 function renderQuizzes(){
-  $('#content').innerHTML=`<div class="top"><h2>🧪 課前小測驗</h2>${isAdmin()?'<button id="manageQuizBank">📚 題庫管理／發布</button>':''}</div><p class="muted">${isAdmin()?'可先建立所有題庫並保存；上課前再按「開放測驗」，學生才看得到。':'每次只顯示一題，選擇答案後立即顯示正解與解析，再按下一題。'}</p><div id="quizEditor"></div>${quizzes.length?quizzes.map(q=>{
+  $('#content').innerHTML=`<div class="top"><h2>🧪 課前預習與課後複習</h2>${isAdmin()?'<button id="manageQuizBank">📚 題庫管理／發布</button><button id="quizWeaknessBtn" class="secondary">📊 弱點分析</button>':''}</div><p class="muted">${isAdmin()?'可先建立所有題庫並保存；上課前再按「開放測驗」，學生才看得到。':'每次只顯示一題，選擇答案後立即顯示正解與解析，再按下一題。'}</p><div id="quizEditor"></div>${quizzes.length?quizzes.map(q=>{
   const mine=!isAdmin()?quizResult(q,me.uid):null;
   const closed=quizExpired(q),perfect=mine&&isPerfect(q,mine);
   const count=quizSubmissions.filter(x=>x.quizId===q.id).length;
   return `<article class="item"><div class="top"><h3>${esc(q.title)}</h3><span class="pill">${(q.questions||[]).length} 題 · ${q.released===true?(closed?'⏰ 已截止':'🟢 開放中'):'🔒 題庫待開放'}</span></div><p class="muted">${esc(q.subject||'理化')} · ${isAdmin()?`已完成 ${count}/${(q.targetIds||[]).length} 人`:(mine?(perfect?'✓ 已全對':`最佳 ${mine.bestScore??mine.score} 分 · 可重測`):'尚未作答')}</p><div class="actions">${isAdmin()?`<button data-results="${q.id}" class="secondary">查看成績</button><button data-toggle-quiz="${q.id}" class="secondary">${q.released===true?"🔒 關閉測驗":"🟢 開放測驗"}</button><button data-remove-quiz="${q.id}" class="danger">刪除</button>`:`${mine?`<button data-myquiz="${q.id}" class="secondary">查看我的結果</button>`:''}${!closed&&!perfect?`<button data-takequiz="${q.id}">${mine?'🔄 重新測驗':'開始作答'}</button>`:''}${closed?'<span class="pill">已截止，不能作答</span>':''}`}</div><div id="quiz-detail-${q.id}"></div></article>`;
 }).join(''):'<div class="empty">目前沒有測驗 🌷</div>'}`;
-  $('#manageQuizBank')?.addEventListener('click',showQuizBank);
+  $('#manageQuizBank')?.addEventListener('click',showQuizBank);$('#quizWeaknessBtn')?.addEventListener('click',showQuizWeakness);
   document.querySelectorAll('[data-takequiz]').forEach(b=>b.onclick=()=>showQuizTake(quizzes.find(q=>q.id===b.dataset.takequiz)));
   document.querySelectorAll('[data-myquiz]').forEach(b=>b.onclick=()=>showQuizMy(quizzes.find(q=>q.id===b.dataset.myquiz)));
   document.querySelectorAll('[data-results]').forEach(b=>b.onclick=()=>showQuizResults(quizzes.find(q=>q.id===b.dataset.results)));
@@ -1299,13 +1299,41 @@ function renderQuizzes(){
   document.querySelectorAll('[data-remove-quiz]').forEach(b=>b.onclick=async()=>{const q=quizzes.find(x=>x.id===b.dataset.removeQuiz);if(!confirm('刪除測驗？學生既有作答紀錄仍會保留。'))return;try{await deleteDoc(doc(db,'quizzes',q.id));await deleteDoc(doc(db,'quizKeys',q.id));await loadQuizzes();renderQuizzes();msg('測驗已刪除')}catch(e){msg('刪除失敗：'+e.message,true)}});
 }
 
+/* Teacher-only concept accuracy from the latest saved answers. */
+async function showQuizWeakness(){
+ const host=$('#quizEditor');if(!isAdmin())return;
+ host.innerHTML='<section class="curriculum-box"><h3>📊 學生弱點分析</h3><p class="muted">正在讀取學生資料…</p></section>';
+ try{
+  const studentsHere=allStudentProfiles.filter(x=>x.uid);
+  const attempts=await getDocs(collection(db,'quizAttempts'));
+  const history=attempts.docs.map(d=>d.data());
+  const records=history.length?history:quizSubmissions;
+  const keyMap=new Map();
+  for(const q of quizzes){try{const snap=await getDoc(doc(db,'quizKeys',q.id));if(snap.exists())keyMap.set(q.id,snap.data().keys||[])}catch(e){console.warn('Unable to read keys',q.id,e)}}
+  const chapters=[...new Set(quizzes.map(q=>q.chapter||q.title.split('｜')[0]).filter(Boolean))];
+  host.innerHTML=`<section class="curriculum-box"><h3>📊 學生弱點分析</h3><p class="muted">以已保存的作答紀錄計算。少於 3 題僅顯示觀察中；同一題多次作答會累計，請搭配首次測驗成績判讀。</p><div class="grid"><label>選擇學生<select id="weakStudent">${studentsHere.map(x=>`<option value="${esc(x.uid)}">${esc(x.name||x.uid)}</option>`).join('')}</select></label><label>章節<select id="weakChapter"><option value="">全部章節</option>${chapters.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></label><label>測驗類型<select id="weakType"><option value="">全部</option><option>課前預習</option><option>課後複習</option></select></label></div><div id="weakReport"></div></section>`;
+  const report=()=>{
+   const uid=$('#weakStudent').value,chapter=$('#weakChapter').value,type=$('#weakType').value;
+   const stats=new Map();let attemptsCount=0;
+   for(const a of records){if(a.studentId!==uid)continue;const q=quizzes.find(x=>x.id===a.quizId);if(!q)continue;
+    if(chapter&&(q.chapter||q.title.split('｜')[0])!==chapter)continue;
+    if(type&&(q.quizType||(/課後|複習/.test(q.title)?'課後複習':'課前預習'))!==type)continue;
+    const keys=keyMap.get(q.id);if(!keys)continue;attemptsCount++;
+    (q.questions||[]).forEach((x,i)=>{const topic=x.topic||q.chapter||'未分類觀念',s=stats.get(topic)||{total:0,correct:0};if(i>=a.answers?.length)return;s.total++;if(a.answers[i]===keys[i]?.correct)s.correct++;stats.set(topic,s)});
+   }
+   const sorted=[...stats].sort((a,b)=>a[1].correct/a[1].total-b[1].correct/b[1].total);
+   $('#weakReport').innerHTML=`<p class="muted">符合條件的作答紀錄：${attemptsCount} 次</p>${sorted.length?sorted.map(([topic,x])=>{const pct=Math.round(x.correct/x.total*100),label=x.total<3?'觀察中':pct<60?'優先補強':pct<80?'需要練習':'已掌握';return `<div class="item"><div class="top"><b>${esc(topic)}</b><span class="pill">${label}</span></div><p>${x.correct}/${x.total} 題答對 · ${pct}%</p><div class="quiz-progress"><div style="width:${pct}%"></div></div></div>`}).join(''):'<p class="muted">目前沒有符合條件的作答資料。請確認學生已交卷，且題目有觀念標籤。</p>'}`;
+  };
+  ['#weakStudent','#weakChapter','#weakType'].forEach(id=>$(id).addEventListener('change',report));report();
+ }catch(e){host.innerHTML=`<p class="muted">弱點分析載入失敗：${esc(e.message)}</p>`}
+}
 /* 獨立題庫：儲存題目不指定學生，發布時才建立測驗 */
 async function showQuizBank(){
  const host=$('#quizEditor');host.innerHTML='<p class="muted">正在讀取題庫…</p>';
  try{
   const snap=await getDocs(collection(db,'quizBanks'));
   const banks=snap.docs.map(d=>({id:d.id,...d.data()}));
-  host.innerHTML=`<section class="curriculum-box"><h3>📚 題庫管理</h3><p class="muted">先儲存所有題庫，不必選學生。要測驗時才選章節、題數與學生。</p><label>一次匯入多份 CSV（可多選）<input id="bankCsv" type="file" accept=".csv,text/csv" multiple></label><div id="bankUploadStatus" class="muted"></div><div class="actions"><button type="button" id="bankManualAdd">＋手動建立題庫</button></div><div id="bankManualEditor"></div><h4>已儲存的題庫（${banks.length}）</h4><div id="bankRows">${banks.length?banks.map(b=>`<article class="item"><div class="top"><b>${esc(b.title||'未命名題庫')}</b><span class="pill">${(b.items||[]).length} 題</span></div><p class="muted">${esc(b.subject||'理化')} · ${esc(b.chapter||'未分類')}</p><div class="actions"><button type="button" data-bank-publish="${b.id}">選學生並開放</button><button type="button" class="secondary" data-bank-preview="${b.id}">查看題目</button><button type="button" class="secondary" data-bank-edit="${b.id}">編輯題庫</button><button type="button" class="danger" data-bank-delete="${b.id}">刪除題庫</button></div><div id="bank-action-${b.id}"></div></article>`).join(''):'<p class="muted">目前沒有題庫，先匯入 CSV。</p>'}</div></section>`;
+  host.innerHTML=`<section class="curriculum-box"><h3>📚 題庫管理</h3><p class="muted">先儲存所有題庫，不必選學生。要測驗時才選章節、題數與學生。</p><label>一次匯入多份 CSV（可多選）<input id="bankCsv" type="file" accept=".csv,text/csv" multiple></label><div id="bankUploadStatus" class="muted"></div><div class="actions"><button type="button" id="bankManualAdd">＋手動建立題庫</button></div><div id="bankManualEditor"></div><h4>已儲存的題庫（${banks.length}）</h4><div id="bankRows">${banks.length?banks.map(b=>`<article class="item"><div class="top"><b>${esc(b.title||'未命名題庫')}</b><span class="pill">${(b.items||[]).length} 題</span></div><p class="muted">${esc(b.subject||'理化')} · ${esc(b.chapter||'未分類')} · ${esc(b.quizType||'未分類測驗')}</p><div class="actions"><button type="button" data-bank-publish="${b.id}">選學生並開放</button><button type="button" class="secondary" data-bank-preview="${b.id}">查看題目</button><button type="button" class="secondary" data-bank-edit="${b.id}">編輯題庫</button><button type="button" class="danger" data-bank-delete="${b.id}">刪除題庫</button></div><div id="bank-action-${b.id}"></div></article>`).join(''):'<p class="muted">目前沒有題庫，先匯入 CSV。</p>'}</div></section>`;
   $('#bankManualAdd').onclick=()=>bankEditor(null,()=>showQuizBank());
   host.querySelectorAll('[data-bank-edit]').forEach(btn=>btn.onclick=()=>bankEditor(banks.find(b=>b.id===btn.dataset.bankEdit),()=>showQuizBank()));
   $('#bankCsv').onchange=async e=>{
@@ -1318,7 +1346,7 @@ async function showQuizBank(){
      const chapters=[...new Set(items.map(x=>x.chapter).filter(Boolean))];
      for(const chapter of (chapters.length?chapters:['未分類'])){
       const group=items.filter(x=>!chapters.length||x.chapter===chapter);
-      await addDoc(collection(db,'quizBanks'),{title:chapters.length?chapter:file.name.replace(/\.csv$/i,''),chapter,subject:'理化',items:group,teacherId:me.uid,createdAt:serverTimestamp()});success++;
+      await addDoc(collection(db,'quizBanks'),{title:file.name.replace(/\.csv$/i,'')+(chapters.length>1?'｜'+chapter:''),chapter,subject:'理化',quizType:group[0]?.quizType||(/課後|複習/.test(file.name)?'課後複習':'課前預習'),items:group,teacherId:me.uid,createdAt:serverTimestamp()});success++;
      }
     }
     msg(`已成功儲存 ${success} 個章節題庫`);await showQuizBank();
@@ -1335,7 +1363,7 @@ async function showQuizBank(){
   });
   host.querySelectorAll('[data-bank-publish]').forEach(b=>b.onclick=()=>{
    const bank=banks.find(x=>x.id===b.dataset.bankPublish);const target=$('#bank-action-'+bank.id);
-   target.innerHTML=`<div class="curriculum-box"><h4>發布「${esc(bank.title)}」</h4><label>測驗名稱<input class="bank-title" value="${esc(bank.title)}｜課前預習" maxlength="80"></label><label>截止日期與時間<input class="bank-deadline" type="datetime-local" required value="${localDateTime(7)}"></label><label>出題數（最多 20 題）<input class="bank-count" type="number" min="1" max="${Math.min(20,bank.items.length)}" value="${Math.min(20,bank.items.length)}"></label><p class="muted">指定學生（這一步才選擇）</p><div>${students.map(st=>`<label style="display:inline-block;margin:5px 12px 5px 0"><input type="checkbox" class="bank-student" value="${esc(st.uid)}">${esc(st.name)}</label>`).join('')}</div><button type="button" class="bank-confirm">🟢 開放給指定學生</button></div>`;
+   target.innerHTML=`<div class="curriculum-box"><h4>發布「${esc(bank.title)}」</h4><label>測驗名稱<input class="bank-title" value="${esc(bank.title)}｜課前預習" maxlength="80"></label><label>截止日期與時間<input class="bank-deadline" type="datetime-local" required value="${localDateTime(7)}"></label><label>測驗類型<select class="bank-quiz-type"><option value="課前預習" ${bank.quizType==='課後複習'?'':'selected'}>課前預習（基礎）</option><option value="課後複習" ${bank.quizType==='課後複習'?'selected':''}>課後複習（中等）</option></select></label><label>出題數（最多 20 題）<input class="bank-count" type="number" min="1" max="${Math.min(20,bank.items.length)}" value="${Math.min(20,bank.items.length)}"></label><p class="muted">指定學生（這一步才選擇）</p><div>${students.map(st=>`<label style="display:inline-block;margin:5px 12px 5px 0"><input type="checkbox" class="bank-student" value="${esc(st.uid)}">${esc(st.name)}</label>`).join('')}</div><button type="button" class="bank-confirm">🟢 開放給指定學生</button></div>`;
    target.querySelector('.bank-confirm').onclick=async()=>{
     const ids=[...target.querySelectorAll('.bank-student:checked')].map(x=>x.value);
     const title=target.querySelector('.bank-title').value.trim();const deadline=target.querySelector('.bank-deadline').value;const count=Number(target.querySelector('.bank-count').value);
@@ -1344,10 +1372,10 @@ async function showQuizBank(){
     if(!confirm(`確定發布「${title}」給 ${ids.length} 位學生？`))return;
     const btn=target.querySelector('.bank-confirm');btn.disabled=true;
     const items=bank.items.slice(0,count);
-    const questions=items.map(x=>({text:x.text,options:x.options,points:x.points}));
+    const questions=items.map(x=>({text:x.text,options:x.options,points:x.points,topic:x.topic||x.chapter||bank.chapter||'未分類',level:x.level||''}));
     const keys=items.map(x=>({correct:x.correct,explanation:x.explanation}));
     try{
-     const ref=await addDoc(collection(db,'quizzes'),{title,subject:bank.subject||'理化',targetIds:ids,questions,released:false,deadline,teacherId:me.uid,createdAt:serverTimestamp(),bankId:bank.id});
+     const ref=await addDoc(collection(db,'quizzes'),{title,quizType:target.querySelector('.bank-quiz-type').value,chapter:bank.chapter||'',subject:bank.subject||'理化',targetIds:ids,questions,released:false,deadline,teacherId:me.uid,createdAt:serverTimestamp(),bankId:bank.id});
      try{await setDoc(doc(db,'quizKeys',ref.id),{keys,teacherId:me.uid});await updateDoc(ref,{released:true})}
      catch(err){try{await deleteDoc(ref)}catch(_){}throw err}
      await loadQuizzes();renderQuizzes();msg(`已開放「${title}」給 ${ids.length} 位學生`);
@@ -1382,7 +1410,7 @@ function parseQuizCSV(text){
     if(!value('題目')||options.some(x=>!x)||!value('詳解')||!['A','B','C','D'].includes(answer))throw Error(`第 ${i+2} 列有空白欄位或答案不是 A～D`);
     if(!Number.isFinite(points)||points<=0||points>100)throw Error(`第 ${i+2} 列配分需介於 1～100`);
     if(value('題目').length>1000||options.some(x=>x.length>300)||value('詳解').length>1500)throw Error(`第 ${i+2} 列文字過長`);
-    return {chapter:headers.includes('章節')?value('章節'):'',text:value('題目'),options,correct:'ABCD'.indexOf(answer),explanation:value('詳解'),points};
+    return {chapter:headers.includes('章節')?value('章節'):'',topic:headers.includes('觀念標籤')?value('觀念標籤'):'',level:headers.includes('難度')?value('難度'):'',quizType:headers.includes('測驗類型')?value('測驗類型'):'',text:value('題目'),options,correct:'ABCD'.indexOf(answer),explanation:value('詳解'),points};
   });
 }
 function showQuizEditor(){
